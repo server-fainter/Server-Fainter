@@ -33,6 +33,7 @@ typedef struct {
 
 client_t clients[MAX_CLIENTS];
 pthread_mutex_t clients_mutex;
+
 // Base64 인코딩 함수 구현
 void base64_encode(const unsigned char *input, int length, char *output, int output_size) {
     int encoded_length = EVP_EncodeBlock((unsigned char *)output, input, length);
@@ -70,6 +71,7 @@ void sha1_hash(const char *input, size_t len, unsigned char *output) {
     EVP_MD_CTX_free(mdctx);
 }
 
+
 // WebSocket 핸드셰이크 처리 함수
 //HTTP로 클라이언트에게 수신 후 업그레이드해서 발신
 int websocket_handshake(int client_fd) {
@@ -93,9 +95,9 @@ int websocket_handshake(int client_fd) {
     //끝문자 NULL  
     buffer[received] = '\0';
     
-    // if (strstr(buffer, "Upgrade: websocket") == NULL) {
-    //     return -1;
-    // }
+     if (strstr(buffer, "Upgrade: websocket") == NULL) {
+         return -1;
+     }
 
     char *key_header = strstr(buffer, "Sec-WebSocket-Key: ");
     if (!key_header) {
