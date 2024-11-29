@@ -29,14 +29,21 @@
         justify-content: center;
         align-items: center;
         gap: 20px;
-        background-color: #fff;
         padding: 20px;
         border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .ver {
+        display: block;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        padding: 20px;
       }
 
       canvas {
-        border: 2px solid #000;
+        background-color: #fff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 2px solid #444;
         image-rendering: pixelated;
         cursor: crosshair;
         transition: transform 0.2s;
@@ -54,12 +61,20 @@
         height: 100px;
         border: none;
         cursor: pointer;
-        border-radius: 100%;
+        border-radius: 10%;
         transition: 0.3s;
+        background-color: #fff;
+        padding: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
       }
 
       #color-picker input[type="color"]:hover {
         transform: scale(1.1);
+      }
+      #client-box {
+        padding: 10px;
+        background-color: #fff;
+        border-radius: 10%;
       }
 
       /* 미디어 쿼리: 화면 크기가 작은 경우의 스타일 */
@@ -82,7 +97,8 @@
 
       /* footer 스타일 */
       footer {
-        margin-top: 20px;
+        border: #333;
+        margin-top: 50px;
         font-size: 0.9em;
         text-align: center;
         color: #777;
@@ -98,13 +114,16 @@
   </head>
   <body>
     <h1>r/place 클라이언트</h1>
-    <div>
     <div class="hor">
-      
-        <canvas id="canvas" width="100" height="100"></canvas>
-      </div>
-      <div id="color-picker">
-        <input type="color" id="color" value="#000000" />
+      <canvas id="canvas" width="100" height="100"></canvas>
+      <div class="ver">
+        <div id="color-picker">
+          <input type="color" id="color" value="#000000" />
+        </div>
+        <div id="client-box">
+          <h1>동접자 수</h1>
+          <div id="client-count">Loading...</div>
+        </div>
       </div>
     </div>
     <footer>
