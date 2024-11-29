@@ -28,6 +28,7 @@
     <canvas id="canvas" width="100" height="100"></canvas>
     <div id="color-picker">
       <input type="color" id="color" value="#000000" />
+      <!--(구)-->
       <!-- 기본 하얀색 -->
       <!-- <label for="color">색상 선택:</label>
         <select id="color">
@@ -61,6 +62,8 @@
         return { r, g, b };
       }
 
+      
+      //(구)
       // // 색상 인덱스를 RGB로 변환하는 함수 (8가지 색상 사용)
       // function colorToRGB(colorIndex) {
       //     const colors = [
@@ -147,6 +150,7 @@
         const x = Math.floor((event.clientX - rect.left) * scaleX);
         const y = Math.floor((event.clientY - rect.top) * scaleY);
 
+        //(구)
         // const color = parseInt(colorInput.value);
 
         // // 서버로 픽셀 정보 전송 (3바이트)
