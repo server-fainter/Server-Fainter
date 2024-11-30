@@ -2,9 +2,8 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <title>r/place 클라이언트</title>
+    <title>fainter 클라이언트</title>
     <style>
-      /* 전체 페이지 스타일 */
       body {
         font-family: Arial, sans-serif;
         margin: 0;
@@ -14,30 +13,56 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh;
+        height: 100%;
         flex-direction: column;
+        overflow: auto;
       }
-
-      h1 {
-        font-size: 2em;
-        margin-bottom: 20px;
-        color: #444;
+      #client-count-box {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 10px 20px;
+        background-color: #fff;
+        color: #333;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        font-size: 1em;
+        font-weight: bold;
+        z-index: 1000;
       }
-
       .hor {
         display: flex;
         justify-content: center;
         align-items: center;
-        gap: 20px;
-        padding: 20px;
+        padding: 10px;
         border-radius: 10px;
       }
-      .ver {
-        display: block;
-        justify-content: center;
-        align-items: center;
-        gap: 20px;
-        padding: 20px;
+
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(15, 27px);
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .color-box {
+        width: 27px;
+        height: 27px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .color-box.active {
+        border: 2px solid #444; /* 활성화된 컬러 박스의 테두리 */
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+      }
+      #color-palette-bar {
+        padding: 10px;
+        background-color: #ccc;
+      }
+      .color-box:hover {
+        transform: scale(1.2);
       }
 
       canvas {
@@ -46,89 +71,27 @@
         border: 2px solid #444;
         image-rendering: pixelated;
         cursor: crosshair;
-        transition: transform 0.2s;
       }
 
-      #color-picker {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      }
-
-      #color-picker input[type="color"] {
-        width: 100px;
-        height: 100px;
-        border: none;
-        cursor: pointer;
-        border-radius: 10%;
-        transition: 0.3s;
-        background-color: #fff;
-        padding: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      }
-
-      #color-picker input[type="color"]:hover {
-        transform: scale(1.1);
-      }
-      #client-box {
-        padding: 10px;
-        background-color: #fff;
-        border-radius: 10%;
-      }
-
-      /* 미디어 쿼리: 화면 크기가 작은 경우의 스타일 */
-      @media (max-width: 600px) {
-        .hor {
-          flex-direction: column;
-          gap: 15px;
-        }
-
-        canvas {
-          width: 80px;
-          height: 80px;
-        }
-
-        #color-picker {
-          flex-direction: row;
-          gap: 10px;
-        }
-      }
-
-      /* footer 스타일 */
-      footer {
-        border: #333;
-        margin-top: 50px;
-        font-size: 0.9em;
-        text-align: center;
-        color: #777;
-      }
-      footer a {
-        color: #444;
-        text-decoration: none;
-      }
-      footer a:hover {
-        text-decoration: underline;
+      footer{
+        margin-top: 100px;
       }
     </style>
   </head>
   <body>
-    <h1>r/place 클라이언트</h1>
+    <div id="client-count-box">
+      <span>동접자 수: </span>
+      <span id="client-count">0</span>
+    </div>
     <div class="hor">
       <canvas id="canvas" width="100" height="100"></canvas>
-      <div class="ver">
-        <div id="color-picker">
-          <input type="color" id="color" value="#000000" />
-        </div>
-        <div id="client-box">
-          <h1>동접자 수</h1>
-          <div id="client-count">Loading...</div>
-        </div>
-      </div>
     </div>
-    <footer>
+    <div id="color-palette-bar">
+      <div class="palette" id="color-palette"></div>
+    </div>
+    <!-- <footer>
       <div style="display: flex; justify-content: center">
-        <div>
+        <div style="margin: 5%">
           <a href="https://github.com/server-fainter" target="_blank">
             <img
               src="image.png"
@@ -138,12 +101,12 @@
           </a>
         </div>
         <div>
-          <p>프로젝트 이름: r/place 클라이언트</p>
+          <p>프로젝트 fainter</p>
           <p>팀원: 홍길동, 김철수, 이영희</p>
           <p>개발일: 2024년 11월</p>
         </div>
       </div>
-    </footer>
+    </footer> -->
 
     <script src="script.js"></script>
   </body>
