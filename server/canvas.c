@@ -8,25 +8,26 @@
 #include <stdbool.h>
 
 // 캔버스 초기화
-void canvas_init(Canvas **canvas) {
+void canvas_init(Canvas *canvas) {
 
-    *canvas = malloc(sizeof(Canvas));
-    if (*canvas == NULL) {
+    if (canvas == NULL) {
         perror("Failed to allocate memory for canvas");
         exit(EXIT_FAILURE); // 메모리 할당 실패 시 프로그램 종료
     }
 
     // 뮤텍스 초기화
-    pthread_mutex_init(&(*canvas)->lock, NULL);
+    pthread_mutex_init(&canvas->lock, NULL);
 
     // 모든 픽셀을 기본 색상으로 초기화
     for (int x = 0; x < CANVAS_WIDTH; x++) {
         for (int y = 0; y < CANVAS_HEIGHT; y++) {
-            (*canvas)->pixels[x][y].x = x;
-            (*canvas)->pixels[x][y].y = y;
-            strcpy((*canvas)->pixels[x][y].color, "#FFFFFF"); // 기본 색상
+            canvas->pixels[x][y].x = x;
+            canvas->pixels[x][y].y = y;
+            strcpy(canvas->pixels[x][y].color, "#FFFFFF"); // 기본 색상
         }
     }
+
+    printf("Canvas Init\n");
 
 }
 

@@ -1,4 +1,5 @@
 #include "thread_pool.h"
+#include "task_queue.h"
 #include "context.h"
 #include "canvas.h"
 #include <stdlib.h>
@@ -81,21 +82,18 @@ void process_buffer(Canvas *canvas, const char *buffer, size_t length) {
 }
 
 // 워커 스레드: 작업 큐에서 작업을 가져와 처리
-static void *worker_thread(void *arg) {
-
-    //pthread_t i = pthread_self();
-    //printf("Thread : %ld\n", i);
+void *worker_thread(void *arg) {
 
     Context *ctx = (Context *)arg;
-    TaskQueue *queue = &ctx->queue;
+    TaskQueue *queue = ctx->queue;
 
     while (1) {
         Task task = pop_task(queue);
 
         switch (task.type) {
             case TASK_NEW_CLIENT: {
-                int client_socket = accept_new_client(&ctx->sm);
-                addClient(&ctx->cm, client_socket);
+                int client_socket = accept_new_client(ctx->sm);
+                addClient(ctx->cm, client_socket);
                 break;
             }
             case TASK_TEST_RECV_MESSAGE: {
@@ -104,7 +102,7 @@ static void *worker_thread(void *arg) {
             }
             case TASK_PIXEL_UPDATE: {
                 char *buffer = (char *)task.data;
-                broadcastClients(&ctx->cm, buffer);
+                broadcastClients(ctx->cm, buffer);
 
                 // printf("Thread : %ld -> %s\n", i, buffer);
                 process_buffer(ctx->canvas, buffer, strlen(buffer));
@@ -142,16 +140,27 @@ static void *worker_thread(void *arg) {
     return NULL;
 }
 
-// 스레드 풀 초기화
-void init_thread_pool(ThreadPool *pool, Context *ctx) {
-    for (int i = 0; i < THREAD_POOL_SIZE; i++) {
+void init_thread_pool(ThreadPool *pool, Context *ctx, const int size) {
+
+    pool->size = size;
+    pool->threads = (pthread_t *)malloc(sizeof(pthread_t) * size);
+
+    // 스레드 생성
+    for (int i = 0; i < size; i++) {
         pthread_create(&pool->threads[i], NULL, worker_thread, ctx);
+        perror("pthread_create failed");
+        exit(EXIT_FAILURE);
     }
+
+    printf("Thread Init\n");
 }
 
 // 스레드 풀 삭제
 void destroy_thread_pool(ThreadPool *pool) {
-    for (int i = 0; i < THREAD_POOL_SIZE; i++) {
+
+    const int size = pool->size;
+
+    for (int i = 0; i < size; i++) {
         pthread_cancel(pool->threads[i]);
         pthread_join(pool->threads[i], NULL);
     }

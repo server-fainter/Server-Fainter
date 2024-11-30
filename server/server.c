@@ -26,8 +26,8 @@ int set_nonblocking(int fd) {
 }
 
 // 서버 초기화
-void init_server(ServerManager *sm)
-{
+void init_server(ServerManager *sm){
+
     // 서버 소켓 생성
     sm->server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (sm->server_socket == -1) {

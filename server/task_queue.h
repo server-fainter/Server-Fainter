@@ -3,9 +3,6 @@
 
 #include <pthread.h>
 
-// 작업 큐 크기 정의
-#define QUEUE_SIZE 1024
-
 typedef enum {
     TASK_NEW_CLIENT,                // 새로운 클라이언트가 접속 요청하는 경우
     TASK_TEST_RECV_MESSAGE,         // 테스트용 단순한 메세지 버퍼 recv
@@ -23,14 +20,15 @@ typedef struct {
 
 // 작업 큐(Task Queue) 구조체
 typedef struct {
-    Task tasks[QUEUE_SIZE]; // 작업 배열 (고정 크기 큐)
+    Task *tasks; // 작업 배열 (고정 크기 큐)
     int front, rear;        // 큐의 앞(front)과 뒤(rear) 인덱스
     pthread_mutex_t lock;   // 뮤텍스
     pthread_cond_t cond;    // 조건 변수
+    int size;
 } TaskQueue;
 
 // 작업 큐 초기화 함수
-void init_task_queue(TaskQueue *queue);
+void init_task_queue(TaskQueue *queue, int size);
 
 // 작업을 큐에 추가하는 함수
 void push_task(TaskQueue *queue, Task task);

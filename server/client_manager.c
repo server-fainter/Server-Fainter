@@ -4,11 +4,15 @@
 
 // 클라이언트 매니저 초기화
 int initClientManager(ClientManager* manager) {
+
     manager->head = NULL;
     if (pthread_mutex_init(&manager->mutex, NULL) != 0) {
         perror("Mutex initialization failed");
         return -1;
     }
+
+    printf("Client Manager Init\n");
+
     return 0;
 }
 
@@ -90,8 +94,8 @@ int removeClient(ClientManager* manager, const int client_fd) {
 int broadcastClients(ClientManager* manager, const char* message) {
 
     size_t len = strlen(message);
-    char *buf = (char *)malloc(sizeof(char) * len);
-    strcpy(buf, message);
+    char *buf = (char *)malloc(sizeof(char) * (len));
+    strcpy(buf, message);;
 
     // 뮤텍스 잠금
     if (pthread_mutex_lock(&manager->mutex) != 0) {
@@ -148,4 +152,7 @@ void cleanupClientManager(ClientManager* manager) {
     if (pthread_mutex_destroy(&manager->mutex) != 0) {
         perror("Mutex destroy failed");
     }
+
+    free(manager);
+
 }

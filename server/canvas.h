@@ -20,7 +20,7 @@ typedef struct {
 } Canvas;
 
 // 캔버스 초기화 함수
-void canvas_init(Canvas **canvas);
+void canvas_init(Canvas *canvas);
 
 // 유효한 색상, 좌표인지 확인하는 함수
 bool is_valid_coordinate(int x, int y);

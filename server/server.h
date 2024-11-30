@@ -3,9 +3,9 @@
 
 #include <sys/epoll.h>
 
-#define PORT 8082           // 서버 포트
-#define MAX_EVENTS 1024     // epoll 최대 이벤트 수
-#define BUFFER_SIZE 2048    // 클라이언트와의 메시지 버퍼 크기
+#define PORT 8080           // 서버 포트
+#define MAX_EVENTS 2048     // epoll 최대 이벤트 수
+#define BUFFER_SIZE 1024    // 클라이언트와의 메시지 버퍼 크기
 
 // 서버 매니저 구조체 정의
 typedef struct {
