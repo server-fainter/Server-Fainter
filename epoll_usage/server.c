@@ -14,7 +14,8 @@
 #include <openssl/sha.h>
 #include <openssl/evp.h>
 #include <sys/epoll.h>
-#include <sys/uio.h> // writev 함수 사용을 위한 헤더 추가
+#include <sys/uio.h>
+#include <time.h>
 
 #define PORT 8080
 #define WIDTH 500
@@ -22,6 +23,8 @@
 #define BUFFER_SIZE 8192
 #define MAX_CLIENTS 1000
 #define MAX_EVENTS 1000
+#define CANVAS_FILE "canvas.dat"
+#define SAVE_INTERVAL 60 // 60초마다 저장
 
 static uint8_t canvas[WIDTH][HEIGHT];
 static pthread_mutex_t canvas_mutex;
@@ -38,6 +41,71 @@ typedef struct {
 
 client_t clients[MAX_CLIENTS];
 pthread_mutex_t clients_mutex;
+
+// 캔버스 저장 함수
+int save_canvas_to_file(const char *filename) {
+    const char *temp_filename = "canvas.tmp";
+    FILE *fp = fopen(temp_filename, "wb");
+    if (!fp) {
+        perror("Failed to open temporary canvas file for writing");
+        return -1;
+    }
+
+    pthread_mutex_lock(&canvas_mutex);
+    size_t written = fwrite(canvas, sizeof(uint8_t), WIDTH * HEIGHT, fp);
+    pthread_mutex_unlock(&canvas_mutex);
+
+    fclose(fp);
+
+    if (written != WIDTH * HEIGHT) {
+        fprintf(stderr, "Failed to write complete canvas data to temporary file\n");
+        return -1;
+    }
+
+    // 임시 파일을 실제 파일로 교체 , 데이터 손실 방지
+    if (rename(temp_filename, filename) != 0) {
+        perror("Failed to rename temporary canvas file");
+        return -1;
+    }
+
+    return 0;
+}
+
+// 캔버스 로드 함수
+int load_canvas_from_file(const char *filename) {
+    FILE *fp = fopen(filename, "rb");
+    if (!fp) {
+        // 파일이 없으면 초기화된 상태를 유지
+        printf("Canvas file not found. Initializing with default values.\n");
+        return 0;
+    }
+
+    size_t read = fread(canvas, sizeof(uint8_t), WIDTH * HEIGHT, fp);
+    fclose(fp);
+
+    if (read != WIDTH * HEIGHT) {
+        fprintf(stderr, "Failed to read complete canvas data. Initializing with default values.\n");
+        memset(canvas, 0, sizeof(canvas));
+        return -1;
+    }
+
+    printf("Canvas loaded from file successfully.\n");
+    return 0;
+}
+
+// 주기적으로 캔버스 저장하는 함수
+void *save_canvas_periodically(void *arg) {
+    while (1) {
+        sleep(SAVE_INTERVAL);
+        if (save_canvas_to_file(CANVAS_FILE) == 0) {
+            printf("Canvas saved successfully.\n");
+        } 
+        else {
+            printf("Failed to save canvas.\n");
+        }
+    }
+    return NULL;
+}
 
 // 모든 클라이언트에게 메시지 브로드캐스트하는 함수
 void broadcast_to_clients(unsigned char *message, size_t len) {
@@ -277,7 +345,8 @@ ssize_t process_websocket_frame(client_t *cli) {
         close(cli->socket_fd);
         cli->active = 0;
         return total_frame_len;
-    } else if (opcode == 0x2) {
+    } 
+    else if (opcode == 0x2) {
         // 바이너리 메시지 처리
         size_t i = 0;
         while (i + 5 <= payload_len) { // 5바이트씩 처리 (x: 2바이트, y: 2바이트, color: 1바이트)
@@ -352,6 +421,7 @@ int setup_server(int port) {
 int main(void) {
     int server_fd, epoll_fd;
     struct epoll_event event, events[MAX_EVENTS];
+    pthread_t save_thread;
 
     printf("Server is running on port %d\n", PORT);
 
@@ -359,6 +429,11 @@ int main(void) {
     pthread_mutex_init(&clients_mutex, NULL);
     memset(canvas, 0, sizeof(canvas));
     memset(clients, 0, sizeof(clients));
+
+    // 서버 시작 전에 캔버스 데이터 로드
+    if (load_canvas_from_file(CANVAS_FILE) != 0) {
+        printf("Starting with default canvas.\n");
+    }
 
     server_fd = setup_server(PORT);
     if (server_fd < 0) {
@@ -385,6 +460,12 @@ int main(void) {
         close(server_fd);
         close(epoll_fd);
         return -1;
+    }
+
+    // 캔버스 저장을 주기적으로 수행하는 스레드 생성
+    if (pthread_create(&save_thread, NULL, save_canvas_periodically, NULL) != 0) {
+        perror("Turn off the server, Failed to create save thread");
+        // 계속 진행하되, 저장이 되지 않을 것임을 경고
     }
 
     while (1) {
@@ -482,7 +563,7 @@ int main(void) {
 
                             // 초기 캔버스 데이터 전송
                             pthread_mutex_lock(&canvas_mutex);
-                            size_t actual_init_len = WIDTH * HEIGHT * 5;
+                            size_t init_len = WIDTH * HEIGHT * 5;
                             unsigned char *init_msg = malloc(WIDTH * HEIGHT * 5); // x: 2, y: 2, color:1
                             if (!init_msg) {
                                 perror("Failed to allocate memory for init_msg");
@@ -565,10 +646,12 @@ int main(void) {
                                     // 처리된 프레임을 버퍼에서 제거
                                     memmove(cli->buffer, cli->buffer + frame_len, cli->buffer_offset - frame_len);
                                     cli->buffer_offset -= frame_len;
-                                } else if (frame_len == 0) {
+                                } 
+                                else if (frame_len == 0) {
                                     // 더 이상 처리할 프레임이 없음
                                     break;
-                                } else {
+                                } 
+                                else {
                                     // 오류 발생
                                     printf("Error processing frame for %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                                     close(cli->socket_fd);
@@ -583,7 +666,8 @@ int main(void) {
                             perror("recv");
                             close(cli->socket_fd);
                             cli->active = 0;
-                        } else if (bytes_read == 0) {
+                        } 
+                        else if (bytes_read == 0) {
                             // 클라이언트 연결 종료
                             printf("Client disconnected: %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                             close(cli->socket_fd);
@@ -600,6 +684,19 @@ int main(void) {
             }
         }
     }
+
+    // 루프 종료 시 캔버스 저장, while루프를 탈출하는 방법을 넣어야함..
+        
+    if (save_canvas_to_file(CANVAS_FILE) == 0) {
+        printf("Canvas saved successfully on shutdown.\n");
+    } 
+    else {
+        printf("Failed to save canvas on shutdown.\n");
+    }
+
+    // 저장 스레드 종료 대기 (실제로는 이 지점에 도달하지 않음)
+    pthread_cancel(save_thread);
+    pthread_join(save_thread, NULL);
     // 정리
     close(server_fd);
     close(epoll_fd);
