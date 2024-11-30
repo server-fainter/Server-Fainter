@@ -35,14 +35,16 @@
             try {
                 const data = JSON.parse(event.data);
 
-                if (data.pixel) {
-                    const x = data.pixel.x;
-                    const y = data.pixel.y;
-                    const color = data.pixel.color;
+                if (data.updated_pixel && Array.isArray(data.updated_pixel)) {
+                    data.updated_pixel.forEach(pixel => {
+                        const x = pixel.x;
+                        const y = pixel.y;
+                        const color = pixel.color;
 
-                    // 캔버스의 해당 픽셀 업데이트
-                    ctx.fillStyle = color;
-                    ctx.fillRect(x, y, 1, 1);
+                        // 캔버스의 해당 픽셀 업데이트
+                        ctx.fillStyle = color;
+                        ctx.fillRect(x, y, 1, 1);
+                    });
                 }
             } catch (e) {
                 console.error('JSON 파싱 오류:', e);
@@ -60,7 +62,7 @@
             const x = Math.floor((event.clientX - rect.left) * scaleX);
             const y = Math.floor((event.clientY - rect.top) * scaleY);
 
-            const color = '#FF0000'; // 예시로 빨간색 사용
+            const color = `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`; // 랜덤 색상 사용
 
             // 캔버스의 해당 픽셀 업데이트
             ctx.fillStyle = color;

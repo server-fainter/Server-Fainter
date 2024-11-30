@@ -2,9 +2,14 @@ const net = require('net');
 const WebSocket = require('ws');
 
 const tcpServerHost = 'localhost'; // TCP 소켓 서버의 주소
-const tcpServerPort = 8082;       // TCP 소켓 서버의 포트
+const tcpServerPort = 8080;       // TCP 소켓 서버의 포트
 
 const wssPort = 8081; // WebSocket 서버의 포트
+
+// WebSocket 서버 생성
+const wss = new WebSocket.Server({ port: wssPort }, () => {
+    console.log(`WebSocket 서버가 포트 ${wssPort}에서 실행 중입니다.`);
+});
 
 // TCP 소켓 서버에 연결
 const tcpClient = new net.Socket();
@@ -18,8 +23,10 @@ let tcpBuffer = '';
 tcpClient.on('data', (data) => {
     tcpBuffer += data.toString();
 
-    // 메시지를 개행 문자로 분리
-    let messages = tcpBuffer.split('\n\0');
+    // console.log('recv : ', data.toString());
+
+    // 메시지를 개행 문자로 분리 (\n)
+    let messages = tcpBuffer.split('\n');
     tcpBuffer = messages.pop(); // 마지막 부분적인 메시지는 버퍼에 유지
 
     messages.forEach((message) => {
@@ -38,11 +45,6 @@ tcpClient.on('data', (data) => {
 
 tcpClient.on('close', () => {
     console.log('TCP 서버와의 연결이 종료되었습니다.');
-});
-
-// WebSocket 서버 생성
-const wss = new WebSocket.Server({ port: wssPort }, () => {
-    console.log(`WebSocket 서버가 포트 ${wssPort}에서 실행 중입니다.`);
 });
 
 wss.on('connection', (ws) => {
