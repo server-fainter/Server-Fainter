@@ -23,6 +23,9 @@
 #define MAX_CLIENTS 1000
 #define MAX_EVENTS 1000
 
+#define MSG_TYPE_CANVAS_UPDATE 1
+#define MSG_TYPE_CLIENT_COUNT  2
+
 static uint8_t canvas[WIDTH][HEIGHT];
 static pthread_mutex_t canvas_mutex;
 
@@ -36,46 +39,47 @@ typedef struct {
     size_t buffer_offset;
 } client_t;
 
+unsigned clientCnt=0;
 client_t clients[MAX_CLIENTS];
 pthread_mutex_t clients_mutex;
 
 // 모든 클라이언트에게 메시지 브로드캐스트하는 함수
-void broadcast_to_clients(unsigned char *message, size_t len) {
+void broadcast_canvas(unsigned char *message, size_t len) {
     pthread_mutex_lock(&clients_mutex);
-    // 클라이언트들에게 
+
+    // 메시지 타입 필드를 추가한 새로운 버퍼 생성
+    unsigned char new_message[len + 1];
+    new_message[0] = 0x01; // 메시지 타입: 캔버스 업데이트
+    memcpy(new_message + 1, message, len);
+
+    size_t new_len = len + 1;
+
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (clients[i].active && clients[i].handshake_done) {
             int client_fd = clients[i].socket_fd;
             uint8_t header[10];
             size_t header_size = 0;
-            header[0] = 0x82; // FIN 비트 설정, 바이너리 프레임
+            header[0] = 0x82;
 
-            if (len <= 125) {
-                header[1] = len;
+            if (new_len <= 125) {
+                header[1] = new_len;
                 header_size = 2;
-            } 
-            else if (len <= 65535) {
+            } else if (new_len <= 65535) {
                 header[1] = 126;
-                header[2] = (len >> 8) & 0xFF;
-                header[3] = len & 0xFF;
+                header[2] = (new_len >> 8) & 0xFF;
+                header[3] = new_len & 0xFF;
                 header_size = 4;
-            } 
-            else {
-                // 너무 큰 메시지는 처리하지 않음
+            } else {
                 continue;
             }
-            //iovec구조체와 writev를 통해 헤더 메세지 한번에 시스템 호출로 전송
-            // 지정된 소켓에 대해 iov배열에 있는 두개의 버퍼를 한번에 보냄
+
             struct iovec iov[2];
-            //헤더전용 버퍼
-            iov[0].iov_base = header; //시작포인터
-            iov[0].iov_len = header_size;//길이
-            //바디전용 버퍼
-            iov[1].iov_base = message;//ㅅㅣ작포인터
-            iov[1].iov_len = len;//길이
-            
-            //send==writev
-            ssize_t sent_bytes = writev(client_fd, iov, 2); //헤더랑 메세지를  한번에 보냄
+            iov[0].iov_base = header;
+            iov[0].iov_len = header_size;
+            iov[1].iov_base = new_message;
+            iov[1].iov_len = new_len;
+
+            ssize_t sent_bytes = writev(client_fd, iov, 2);
             if (sent_bytes < 0) {
                 perror("Failed to send to client");
                 clients[i].active = 0;
@@ -91,9 +95,67 @@ void broadcast_to_clients(unsigned char *message, size_t len) {
                    ntohs(clients[i].address.sin_port));
         }
     }
+
     pthread_mutex_unlock(&clients_mutex);
 }
 
+// 모든 클라이언트의 동접자 수를 브로트 캐스트 하는 함수
+void broadcast_client_count(unsigned int clientCnt) {
+    pthread_mutex_lock(&clients_mutex);
+
+    // unsigned int clientCnt를 unsigned char로 변환
+    unsigned char message[5]; 
+    message[0] = 0x02; // 메시지 타입: 동접자 수
+    message[1] = (clientCnt >> 24) & 0xFF;
+    message[2] = (clientCnt >> 16) & 0xFF;
+    message[3] = (clientCnt >> 8) & 0xFF;
+    message[4] = clientCnt & 0xFF;
+
+    size_t len = sizeof(message);
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].active && clients[i].handshake_done) {
+            int client_fd = clients[i].socket_fd;
+            uint8_t header[10];
+            size_t header_size = 0;
+            header[0] = 0x82; // FIN 비트 설정, 바이너리 프레임
+
+            if (len <= 125) {
+                header[1] = len;
+                header_size = 2;
+            } else if (len <= 65535) {
+                header[1] = 126;
+                header[2] = (len >> 8) & 0xFF;
+                header[3] = len & 0xFF;
+                header_size = 4;
+            } else {
+                continue;
+            }
+
+            struct iovec iov[2];
+            iov[0].iov_base = header;
+            iov[0].iov_len = header_size;
+            iov[1].iov_base = message;
+            iov[1].iov_len = len;
+
+            ssize_t sent_bytes = writev(client_fd, iov, 2);
+            if (sent_bytes < 0) {
+                perror("Failed to send client count");
+                clients[i].active = 0;
+                close(clients[i].socket_fd);
+                printf("Closed connection with %s:%d due to send failure\n",
+                       inet_ntoa(clients[i].address.sin_addr),
+                       ntohs(clients[i].address.sin_port));
+                continue;
+            }
+
+            printf("Broadcasted client count (%u) to %s:%d\n", clientCnt,
+                   inet_ntoa(clients[i].address.sin_addr),
+                   ntohs(clients[i].address.sin_port));
+        }
+    }
+    pthread_mutex_unlock(&clients_mutex);
+}
 // Base64 인코딩 함수 구현, handshake 함수에서 사용
 void base64_encode(const unsigned char *input, int length, char *output, int output_size) {
     int encoded_length = EVP_EncodeBlock((unsigned char *)output, input, length);
@@ -217,7 +279,7 @@ int websocket_handshake(client_t *cli) {
     }
 
     printf("Handshake completed with %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
-
+    
     return 0;
 }
 
@@ -281,6 +343,9 @@ ssize_t process_websocket_frame(client_t *cli) {
         printf("Client disconnected: %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
         close(cli->socket_fd);
         cli->active = 0;
+        clientCnt--;
+        printf("동접자 수:%d(나감)\n",clientCnt);
+        broadcast_client_count(clientCnt);
         return total_frame_len;
     } else if (opcode == 0x2) {
         // 바이너리 메시지 처리
@@ -298,7 +363,7 @@ ssize_t process_websocket_frame(client_t *cli) {
 
                 // 변경 사항을 모든 클라이언트에게 브로드캐스트
                 unsigned char msg[3] = { x, y, color };
-                broadcast_to_clients(msg, 3);
+                broadcast_canvas(msg, 3);
 
                 printf("Updated pixel (%d, %d) to color %d\n", x, y, color);
             }
@@ -479,6 +544,7 @@ int main(void) {
                     if (!cli->handshake_done) {
                         // 핸드셰이크 수행
                         if (websocket_handshake(cli) == 0) { //처음엔 핸드쉐이크를 수행
+                            //핸드 셰이크 성공시++
                             cli->handshake_done = 1;
 
                             // 초기 캔버스 데이터 전송
@@ -586,6 +652,10 @@ int main(void) {
                             printf("Client disconnected: %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                             close(cli->socket_fd);
                             cli->active = 0;
+                            clientCnt--;
+                            printf("동접자 수:%d(나감)\n",clientCnt);
+                            broadcast_client_count(clientCnt);
+
                         }
                     }
                 }
@@ -594,6 +664,8 @@ int main(void) {
                     printf("Client disconnected (EPOLLHUP/EPOLLERR): %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                     close(cli->socket_fd);
                     cli->active = 0;
+                    clientCnt--;
+                    printf("동접자 수:%d(나감)\n",clientCnt);
                 }
             }
         }

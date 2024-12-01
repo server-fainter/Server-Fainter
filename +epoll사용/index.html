@@ -137,12 +137,13 @@
       //캔버스 및 화면 요소
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
+      const clientCnt = document.getElementById("client-count");
       const colorInput = document.getElementById("color");
       const colorPalette = document.getElementById("color-palette");
 
       // 캔버스 크기를 확대하여 표시 (픽셀 확대 효과)
-      canvas.style.width = "600px";
-      canvas.style.height = "600px";
+      canvas.style.width = "800px";
+      canvas.style.height = "800px";
       //---------------------------------------------------
       //색상인덱스
       const colorsHex = [
@@ -277,26 +278,38 @@
       //서버로부터 온 메세지
       ws.onmessage = function (event) {
         const data = new Uint8Array(event.data);
-        let i = 0;
-        while (i + 2 < data.length) {
-          const x = data[i];
-          const y = data[i + 1];
-          const color = data[i + 2];
-          i += 3;
+        const messageType = data[0];
+        console.log("메세지 타입",messageType);
+        if (messageType === 0x01) {
+          //1: 캔버스 업데이트
+          let i = 1;
+          while (i + 2 < data.length) {
+            const x = data[i];
+            const y = data[i + 1];
+            const color = data[i + 2];
+            i += 3;
 
-          // 색상을 적용하여 픽셀 데이터 업데이트
-          // color: color배열을 기반으로하는 인덱스가 넘어옴
-          // 업데이트에는 rgba가 필요
-          // 즉 hex color->> colorToRGB-->> r,g,b,a
-          const index = (y * 100 + x) * 4;
-          const rgbColor = colorToRGB(color);
-          pixelData[index] = rgbColor.r;
-          pixelData[index + 1] = rgbColor.g;
-          pixelData[index + 2] = rgbColor.b;
-          pixelData[index + 3] = 255; // 불투명도 (변경하지 않음)
+            // 색상을 적용하여 픽셀 데이터 업데이트
+            // color: color배열을 기반으로하는 인덱스가 넘어옴
+            // 업데이트에는 rgba가 필요
+            // 즉 hex color->> colorToRGB-->> r,g,b,a
+            const index = (y * 100 + x) * 4;
+            const rgbColor = colorToRGB(color);
+            pixelData[index] = rgbColor.r;
+            pixelData[index + 1] = rgbColor.g;
+            pixelData[index + 2] = rgbColor.b;
+            pixelData[index + 3] = 255; // 불투명도 (변경하지 않음)
+          }
+          //캔버스 업데이트
+          updateCanvas();
+        } else if (messageType === 0x02) {
+          // 동접자 수 업데이트 처리
+          const clientCount =
+            (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
+          clientCnt.innerText = clientCount;
+        } else {
+          console.warn("Unknown message type:", messageType);
         }
-        //캔버스 업데이트
-        updateCanvas();
       };
 
       ws.onclose = function () {
