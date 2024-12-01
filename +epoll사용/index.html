@@ -4,96 +4,228 @@
     <meta charset="UTF-8" />
     <title>r/place 클라이언트</title>
     <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f7f7f7;
+        color: #333;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        flex-direction: column;
+        overflow: auto;
+      }
+      #client-count-box {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 10px 20px;
+        background-color: #fff;
+        color: #333;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        font-size: 1em;
+        font-weight: bold;
+        z-index: 1000;
+      }
+      .hor {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        border-radius: 10px;
+      }
+
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(15, 27px);
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .color-box {
+        width: 27px;
+        height: 27px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .color-box.active {
+        border: 2px solid #444; /* 활성화된 컬러 박스의 테두리 */
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+      }
+      #color-palette-bar {
+        padding: 10px;
+        background-color: #ccc;
+      }
+      .color-box:hover {
+        transform: scale(1.2);
+      }
+
       canvas {
-        border: 1px solid #000;
+        background-color: #fff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 2px solid #444;
         image-rendering: pixelated;
         cursor: crosshair;
       }
-      #color-picker {
-        margin-top: 10px;
-      }
-      #color-preview {
-        display: inline-block;
-        width: 20px;
-        height: 20px;
-        background-color: white;
-        margin-left: 10px;
-        vertical-align: middle;
-        border: 1px solid #000;
+
+      footer {
+        margin-top: 100px;
       }
     </style>
   </head>
   <body>
-    <h1>r/place 클라이언트</h1>
+    <div id="client-count-box">
+      <span>동접자 수: </span>
+      <span id="client-count">0</span>
+    </div>
+    <div class="hor">
+      <canvas id="canvas" width="100" height="100"></canvas>
+    </div>
+    <div id="color-palette-bar">
+      <div class="palette" id="color-palette"></div>
+    </div>
+    <!-- <h1>r/place 클라이언트</h1>
     <canvas id="canvas" width="100" height="100"></canvas>
     <div id="color-picker">
-      <input type="color" id="color" value="#000000" />
-      <!--(구)-->
-      <!-- 기본 하얀색 -->
-      <!-- <label for="color">색상 선택:</label>
-        <select id="color">
-            <option value="0">흰색</option>
-            <option value="1">검은색</option>
-            <option value="2" selected>빨강</option>
-            <option value="3">초록</option>
-            <option value="4">파랑</option>
-            <option value="5">노랑</option>
-            <option value="6">청록</option>
-            <option value="7">자홍</option>
-        </select>
-        <span id="color-preview"></span> -->
-    </div>
+      <label for="color">색상 선택:</label>
+      <select id="color">
+        <option value="0">흰색</option>
+        <option value="1">검은색</option>
+        <option value="2" selected>빨강</option>
+        <option value="3">초록</option>
+        <option value="4">파랑</option>
+        <option value="5">노랑</option>
+        <option value="6">청록</option>
+        <option value="7">자홍</option>
+      </select>
+      <span id="color-preview"></span>
+    </div> -->
 
     <script>
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
       const colorInput = document.getElementById("color");
       const colorPreview = document.getElementById("color-preview");
+      const colorPalette = document.getElementById("color-palette");
 
       // 캔버스 크기를 확대하여 표시 (픽셀 확대 효과)
       canvas.style.width = "500px";
       canvas.style.height = "500px";
+      //---------------------------------------------------
+      //색상인덱스
+      const colorsHex = [
+        "#ff0000",
+        "#ffa600",
+        "#ffe600",
+        "#8aff00",
+        "#24ff00",
+        "#00ff00",
+        "#00ff83",
+        "#00ffe6",
+        "#00e7ff",
+        "#008fff",
+        "#0024ff",
+        "#2400ff",
+        "#8a00ff",
+        "#ff00ff",
+        "#ff0083",
+        "#ff0024",
+        "#d70000",
+        "#8c4000",
+        "#e67c00",
+        "#b1d700",
+        "#4cc100",
+        "#00c16a",
+        "#00c1c1",
+        "#0055c1",
+        "#002fc1",
+        "#7200c1",
+        "#c100c1",
+        "#c10072",
+        "#8c2600",
+        "#4c0f00",
+      ];
+      //colorHex를 통해 팔레트 리스트 생성
+      colorsHex.forEach((color, Index) => {
+        //colorBox객체에 div를 여러개 두어 color-box생성
+        const colorBox = document.createElement("div");
+        colorBox.className = "color-box";
+        //각 원소 색으로 박스 채우기
+        colorBox.style.backgroundColor = color;
+        //컬러박스에 이벤트리스너
+        colorBox.addEventListener("click", () => {
+          // 클릭된애는 선택된 컬러로 처리
+          selectColor(color, Index);
 
-      // 색상(hex)을 RGB 객체로 변환하는 함수
-      function hexToRGB(hex) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return { r, g, b };
+          // 이전 활성화된 컬러 박스에서 active 클래스 제거
+          document
+            .querySelectorAll(".color-box.active")
+            .forEach((activeBox) => {
+              activeBox.classList.remove("active");
+            });
+
+          // 현재 클릭된 컬러 박스에 active 클래스 추가
+          colorBox.classList.add("active");
+        });
+        colorPalette.appendChild(colorBox);
+      });
+
+      // 선택된 색상: 색 이름과 인덱스(colorHex) 값
+      let selectedColor = "#000000";
+      let selectedColor_Index = 0;
+
+      //클릭된 애->선택: 컬러전역변수 설정
+      function selectColor(color, Index) {
+        selectedColor = color;
+        selectedColor_Index = Index;
+        console.log(`선택된 색상: ${selectedColor_Index}:${color}`);
       }
 
-      
-      //(구)
-      // // 색상 인덱스를 RGB로 변환하는 함수 (8가지 색상 사용)
-      // function colorToRGB(colorIndex) {
-      //     const colors = [
-      //         { r: 255, g: 255, b: 255 }, // 흰색
-      //         { r: 0, g: 0, b: 0 },       // 검은색
-      //         { r: 255, g: 0, b: 0 },     // 빨강
-      //         { r: 0, g: 255, b: 0 },     // 초록
-      //         { r: 0, g: 0, b: 255 },     // 파랑
-      //         { r: 255, g: 255, b: 0 },   // 노랑
-      //         { r: 0, g: 255, b: 255 },   // 청록
-      //         { r: 255, g: 0, b: 255 },   // 자홍
-      //     ];
-      //     return colors[colorIndex % colors.length];
-      // }
+      // 색상 인덱스를 RGB로 변환하는 함수
+      // 캔버스 업데이트 시 필요
+      //ex 2->r,g,b
+      function colorToRGB(colorIndex) {
+        const colors = [
+          { r: 255, g: 0, b: 0 }, // #ff0000 (빨강)
+          { r: 255, g: 166, b: 0 }, // #ffa600 (주황)
+          { r: 255, g: 230, b: 0 }, // #ffe600 (노랑)
+          { r: 138, g: 255, b: 0 }, // #8aff00 (연두)
+          { r: 36, g: 255, b: 0 }, // #24ff00 (연두)
+          { r: 0, g: 255, b: 0 }, // #00ff00 (초록)
+          { r: 0, g: 255, b: 131 }, // #00ff83 (청록)
+          { r: 0, g: 255, b: 230 }, // #00ffe6 (청록)
+          { r: 0, g: 231, b: 255 }, // #00e7ff (하늘)
+          { r: 0, g: 143, b: 255 }, // #008fff (파랑)
+          { r: 0, g: 36, b: 255 }, // #0024ff (파랑)
+          { r: 36, g: 0, b: 255 }, // #2400ff (파랑)
+          { r: 138, g: 0, b: 255 }, // #8a00ff (자주)
+          { r: 255, g: 0, b: 255 }, // #ff00ff (자홍)
+          { r: 255, g: 0, b: 131 }, // #ff0083 (분홍)
+          { r: 255, g: 0, b: 36 }, // #ff0024 (빨강)
+          { r: 215, g: 0, b: 0 }, // #d70000 (적색)
+          { r: 140, g: 64, b: 0 }, // #8c4000 (갈색)
+          { r: 230, g: 124, b: 0 }, // #e67c00 (주황)
+          { r: 177, g: 215, b: 0 }, // #b1d700 (연두)
+          { r: 76, g: 193, b: 0 }, // #4cc100 (연두)
+          { r: 0, g: 193, b: 106 }, // #00c16a (청록)
+          { r: 0, g: 193, b: 193 }, // #00c1c1 (청록)
+          { r: 0, g: 85, b: 193 }, // #0055c1 (파랑)
+          { r: 0, g: 47, b: 193 }, // #002fc1 (파랑)
+          { r: 114, g: 0, b: 193 }, // #7200c1 (보라)
+          { r: 193, g: 0, b: 193 }, // #c100c1 (보라)
+          { r: 193, g: 0, b: 114 }, // #c10072 (보라)
+          { r: 140, g: 38, b: 0 }, // #8c2600 (갈색)
+          { r: 76, g: 15, b: 0 }, // #4c0f00 (갈색)
+        ];
 
-      // 색상 미리보기 업데이트 함수
-      function updateColorPreview() {
-        const colorIndex = parseInt(colorInput.value);
-        //컬러파레트추가로 삭제
-        //const rgb = colorToRGB(colorIndex);
-        //const colorString = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
-        colorPreview.style.backgroundColor = colorString;
+        return colors[colorIndex % colors.length];
       }
-
-      // 초기 색상 미리보기 설정
-      updateColorPreview();
-
-      // 색상 변경 시 미리보기 업데이트
-      colorInput.addEventListener("input", updateColorPreview);
-
+      //---------------------------------------------------
       // 캔버스 초기화
       let pixelData = new Uint8Array(100 * 100 * 4); // RGBA 형식
 
@@ -105,15 +237,15 @@
         pixelData[i + 3] = 255; // A (불투명도)
       }
       updateCanvas();
-
+      //---------------------------------------------------
       // 서버에 연결
-      const ws = new WebSocket("ws://localhost:17171"); // C 서버의 포트로 연결
+      const ws = new WebSocket("ws://localhost:8080"); // C 서버의 포트로 연결
       ws.binaryType = "arraybuffer";
-
+      // 웹 소켓 오픈
       ws.onopen = function () {
         console.log("WebSocket 연결 성공");
       };
-
+      //서버로부터 온 메세지
       ws.onmessage = function (event) {
         const data = new Uint8Array(event.data);
         let i = 0;
@@ -124,6 +256,9 @@
           i += 3;
 
           // 색상을 적용하여 픽셀 데이터 업데이트
+          // color: color배열을 기반으로하는 인덱스가 넘어옴
+          // 업데이트에는 rgba가 필요
+          // 즉 hex color->> colorToRGB-->> r,g,b,a
           const index = (y * 100 + x) * 4;
           const rgbColor = colorToRGB(color);
           pixelData[index] = rgbColor.r;
@@ -131,6 +266,7 @@
           pixelData[index + 2] = rgbColor.b;
           pixelData[index + 3] = 255; // 불투명도 (변경하지 않음)
         }
+        //캔버스 업데이트
         updateCanvas();
       };
 
@@ -141,6 +277,7 @@
       ws.onerror = function (error) {
         console.error("WebSocket 오류:", error);
       };
+      //---------------------------------------------------
 
       // 캔버스에 클릭 이벤트 리스너 추가
       canvas.addEventListener("click", function (event) {
@@ -150,13 +287,10 @@
         const x = Math.floor((event.clientX - rect.left) * scaleX);
         const y = Math.floor((event.clientY - rect.top) * scaleY);
 
-        //(구)
-        // const color = parseInt(colorInput.value);
+        const color = selectedColor_Index;
 
-        // // 서버로 픽셀 정보 전송 (3바이트)
-        // const message = new Uint8Array([x, y, color]);
-        const rgb = hexToRGB(color);
-        const message = new Uint8Array([x, y, rgb.r, rgb.g, rgb.b]);
+        // 서버로 픽셀 정보 전송 (3바이트)
+        const message = new Uint8Array([x, y, color]);
 
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(message.buffer);
