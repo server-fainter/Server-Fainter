@@ -205,8 +205,8 @@
       });
 
       // 선택된 색상: 색 이름과 인덱스(colorHex) 값
-      let selectedColor = "#000000";
-      let selectedColor_Index = 29;
+      let selectedColor = "#ffffff";
+      let selectedColor_Index = 28;
 
       //클릭된 애->선택: 컬러전역변수 설정
       function selectColor(color, Index) {
@@ -259,14 +259,14 @@
       // 캔버스 초기화
       let pixelData = new Uint8Array(100 * 100 * 4); // RGBA 형식
 
-      // 캔버스 초기화: 모든 픽셀을 흰색으로 설정
-      for (let i = 0; i < pixelData.length; i += 4) {
-        pixelData[i] = 255; // R
-        pixelData[i + 1] = 255; // G
-        pixelData[i + 2] = 255; // B
-        pixelData[i + 3] = 255; // A (불투명도)
-      }
-      updateCanvas();
+      // // 캔버스 초기화: 모든 픽셀을 흰색으로 설정
+      // for (let i = 0; i < pixelData.length; i += 4) {
+      //   pixelData[i] = 255; // R
+      //   pixelData[i + 1] = 255; // G
+      //   pixelData[i + 2] = 255; // B
+      //   pixelData[i + 3] = 255; // A (불투명도)
+      // }
+      // updateCanvas();
       //---------------------------------------------------
       // 서버에 연결
       const ws = new WebSocket("ws://localhost:8080"); // C 서버의 포트로 연결
@@ -279,8 +279,29 @@
       ws.onmessage = function (event) {
         const data = new Uint8Array(event.data);
         const messageType = data[0];
-        console.log("메세지 타입",messageType);
-        if (messageType === 0x01) {
+        console.log("메세지 타입", messageType);
+        if (messageType === 0x00) {
+          // 0: 캔버스 초기화
+          console.log("캔버스 초기화 메시지 수신");
+          let i = 1; // 첫 번째 바이트는 메시지 타입이므로, 그 다음부터 데이터 처리
+          while (i + 2 < data.length) {
+            const x = data[i]; // x 좌표
+            const y = data[i + 1]; // y 좌표
+            const color = data[i + 2]; // 색상 정보 (색상은 서버에서 0~255로 전송된다고 가정)
+            i += 3;
+
+            // 색상을 적용하여 픽셀 데이터 업데이트
+            const index = (y * 100 + x) * 4; // 캔버스 크기(WIDTH x HEIGHT)에 맞는 인덱스 계산
+            const rgbColor = colorToRGB(color); // 색상 변환 (hex -> r,g,b)
+            pixelData[index] = rgbColor.r;
+            pixelData[index + 1] = rgbColor.g;
+            pixelData[index + 2] = rgbColor.b;
+            pixelData[index + 3] = 255; // 불투명도 (변경하지 않음)
+          }
+
+          // 캔버스 업데이트
+          updateCanvas();
+        } else if (messageType === 0x01) {
           //1: 캔버스 업데이트
           let i = 1;
           while (i + 2 < data.length) {
@@ -303,9 +324,10 @@
           //캔버스 업데이트
           updateCanvas();
         } else if (messageType === 0x02) {
-          // 동접자 수 업데이트 처리
+          // 2: 동접자 수 업데이트 처리
           const clientCount =
             (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
+          console.log("동접자수", clientCount);
           clientCnt.innerText = clientCount;
         } else {
           console.warn("Unknown message type:", messageType);

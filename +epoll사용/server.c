@@ -23,9 +23,6 @@
 #define MAX_CLIENTS 1000
 #define MAX_EVENTS 1000
 
-#define MSG_TYPE_CANVAS_UPDATE 1
-#define MSG_TYPE_CLIENT_COUNT  2
-
 static uint8_t canvas[WIDTH][HEIGHT];
 static pthread_mutex_t canvas_mutex;
 
@@ -558,7 +555,9 @@ int main(void) {
                                 cli->active = 0;
                                 continue;
                             }
-                            size_t index = 0;
+                            size_t index = 1;  // 첫 번째 바이트는 메시지 타입 0x00
+                            init_msg[0] = 0x00;  // 메시지 타입: 0x00 (캔버스 초기화)
+
                             for (uint8_t y = 0; y < HEIGHT; y++) {
                                 for (uint8_t x = 0; x < WIDTH; x++) {
                                     init_msg[index++] = x;
@@ -566,6 +565,7 @@ int main(void) {
                                     init_msg[index++] = canvas[x][y];
                                 }
                             }
+                            printf("cavas init test: %d %d\n", canvas[0][0],canvas[1][1]);
                             pthread_mutex_unlock(&canvas_mutex);
 
                             // WebSocket 프레임 작성 및 전송
@@ -608,6 +608,9 @@ int main(void) {
 
                             printf("Initial canvas sent to %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                             free(init_msg);
+                            clientCnt++;
+                            printf("동접자 수:%d(들어옴)\n",clientCnt);
+                            broadcast_client_count(clientCnt);
                         } 
                         else {
                             // 핸드셰이크 실패
