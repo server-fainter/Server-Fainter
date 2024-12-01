@@ -42,6 +42,7 @@ pthread_mutex_t clients_mutex;
 // 모든 클라이언트에게 메시지 브로드캐스트하는 함수
 void broadcast_to_clients(unsigned char *message, size_t len) {
     pthread_mutex_lock(&clients_mutex);
+    // 클라이언트들에게 
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (clients[i].active && clients[i].handshake_done) {
             int client_fd = clients[i].socket_fd;
@@ -63,13 +64,17 @@ void broadcast_to_clients(unsigned char *message, size_t len) {
                 // 너무 큰 메시지는 처리하지 않음
                 continue;
             }
-
+            //iovec구조체와 writev를 통해 헤더 메세지 한번에 시스템 호출로 전송
+            // 지정된 소켓에 대해 iov배열에 있는 두개의 버퍼를 한번에 보냄
             struct iovec iov[2];
+            //헤더전용 버퍼
             iov[0].iov_base = header; //시작포인터
             iov[0].iov_len = header_size;//길이
+            //바디전용 버퍼
             iov[1].iov_base = message;//ㅅㅣ작포인터
             iov[1].iov_len = len;//길이
-
+            
+            //send==writev
             ssize_t sent_bytes = writev(client_fd, iov, 2); //헤더랑 메세지를  한번에 보냄
             if (sent_bytes < 0) {
                 perror("Failed to send to client");
@@ -217,6 +222,10 @@ int websocket_handshake(client_t *cli) {
 }
 
 // WebSocket 프레임을 처리하는 함수
+/*
+[웹소켓 프레임 구조]
+FIN(opcode)+payloadlength(masking여부)+payload
+*/
 ssize_t process_websocket_frame(client_t *cli) {
     uint8_t *buffer = cli->buffer;
     size_t buffer_len = cli->buffer_offset;
@@ -279,7 +288,7 @@ ssize_t process_websocket_frame(client_t *cli) {
         while (i + 2 < payload_len) { // 3바이트씩 처리
             uint8_t x = payload_data[i];
             uint8_t y = payload_data[i + 1];
-            uint8_t color = payload_data[i + 2];
+            uint8_t color =payload_data[i + 2];
             i += 3;
 
             if (x < WIDTH && y < HEIGHT) {
@@ -348,7 +357,8 @@ int main(void) {
 
     pthread_mutex_init(&canvas_mutex, NULL);
     pthread_mutex_init(&clients_mutex, NULL);
-    memset(canvas, 0, sizeof(canvas));
+    //기본 화면색 29번째 팔레트 값: 하양
+    memset(canvas,29, sizeof(canvas));
     memset(clients, 0, sizeof(clients));
 
     server_fd = setup_server(PORT);
