@@ -15,19 +15,19 @@
         align-items: center;
         height: 100%;
         flex-direction: column;
-        overflow: auto;
+        overflow: scroll;
       }
       #client-count-box {
         position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 10px 20px;
+        top: 2vh;
+        right: 2vw;
+        padding: 1vh 2vw;
         background-color: #fff;
         color: #333;
-        border: 2px solid #ccc;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        font-size: 1em;
+        border: 0.2vw solid #ccc;
+        border-radius: 1vw;
+        box-shadow: 0 0.4vh 0.8vh rgba(0, 0, 0, 0.1);
+        font-size: 2vw;
         font-weight: bold;
         z-index: 1000;
       }
@@ -35,36 +35,45 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 10px;
-        border-radius: 10px;
+        padding: 1vh;
+        border-radius: 1vw;
       }
-
       .palette {
         display: grid;
-        grid-template-columns: repeat(15, 27px);
-        gap: 10px;
-        margin-top: 10px;
+        grid-template-columns: repeat(
+          15,
+          2vw
+        ); /* 컬러 박스 너비를 vw 단위로 변경 */
+        gap: 1vw; /* 간격도 vw 단위로 변경 */
+        margin-top: 1vh;
       }
 
       .color-box {
-        width: 27px;
-        height: 27px;
-        border: 1px solid #ccc;
+        width: 2vw; /* 너비를 vw 단위로 변경 */
+        height: 2vw; /* 높이를 vw 단위로 변경 */
+        border: 0.1vw solid #ccc;
         cursor: pointer;
         transition: transform 0.2s;
       }
+
       .color-box.active {
-        border: 2px solid #444; /* 활성화된 컬러 박스의 테두리 */
-        box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+        border: 0.15vw solid #444; /* 활성화된 컬러 박스의 테두리 */
+        box-shadow: 0 0.4vh rgba(0, 0, 0, 0.2);
       }
+
       #color-palette-bar {
-        padding: 10px;
+        bottom: 1vh;
+        right: 1vh;
+        position: fixed;
+        z-index: 1000;
+
+        padding: 1vh;
         background-color: #ccc;
       }
+
       .color-box:hover {
         transform: scale(1.2);
       }
-
       canvas {
         background-color: #fff;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -89,6 +98,24 @@
     <div id="color-palette-bar">
       <div class="palette" id="color-palette"></div>
     </div>
+    <footer>
+      <div style="display: flex; justify-content: center">
+        <div style="margin: 5%">
+          <a href="https://github.com/server-fainter" target="_blank">
+            <img
+              src="image.png"
+              alt="팀 서버페인터"
+              style="width: 100px; height: auto; border-radius: 10%"
+            />
+          </a>
+        </div>
+        <div>
+          <p>프로젝트 fainter</p>
+          <p>팀원: 홍길동, 김철수, 이영희</p>
+          <p>개발일: 2024년 11월</p>
+        </div>
+      </div>
+    </footer>
     <!-- <h1>r/place 클라이언트</h1>
     <canvas id="canvas" width="100" height="100"></canvas>
     <div id="color-picker">
@@ -107,15 +134,15 @@
     </div> -->
 
     <script>
+      //캔버스 및 화면 요소
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
       const colorInput = document.getElementById("color");
-      const colorPreview = document.getElementById("color-preview");
       const colorPalette = document.getElementById("color-palette");
 
       // 캔버스 크기를 확대하여 표시 (픽셀 확대 효과)
-      canvas.style.width = "500px";
-      canvas.style.height = "500px";
+      canvas.style.width = "600px";
+      canvas.style.height = "600px";
       //---------------------------------------------------
       //색상인덱스
       const colorsHex = [
@@ -145,10 +172,11 @@
         "#0055c1",
         "#002fc1",
         "#7200c1",
-        "#c100c1",
-        "#c10072",
-        "#8c2600",
-        "#4c0f00",
+        //"#c100c1",
+        "#c10072", //자주
+        "#8c2600", //갈색
+        "#000000", //검정
+        "#ffffff", //하양
       ];
       //colorHex를 통해 팔레트 리스트 생성
       colorsHex.forEach((color, Index) => {
@@ -177,7 +205,7 @@
 
       // 선택된 색상: 색 이름과 인덱스(colorHex) 값
       let selectedColor = "#000000";
-      let selectedColor_Index = 0;
+      let selectedColor_Index = 29;
 
       //클릭된 애->선택: 컬러전역변수 설정
       function selectColor(color, Index) {
@@ -217,10 +245,11 @@
           { r: 0, g: 85, b: 193 }, // #0055c1 (파랑)
           { r: 0, g: 47, b: 193 }, // #002fc1 (파랑)
           { r: 114, g: 0, b: 193 }, // #7200c1 (보라)
-          { r: 193, g: 0, b: 193 }, // #c100c1 (보라)
+          // { r: 193, g: 0, b: 193 }, // #c100c1 (보라)
           { r: 193, g: 0, b: 114 }, // #c10072 (보라)
           { r: 140, g: 38, b: 0 }, // #8c2600 (갈색)
-          { r: 76, g: 15, b: 0 }, // #4c0f00 (갈색)
+          { r: 0, g: 0, b: 0 }, // 검정
+          { r: 255, g: 255, b: 255 }, // 하양
         ];
 
         return colors[colorIndex % colors.length];
