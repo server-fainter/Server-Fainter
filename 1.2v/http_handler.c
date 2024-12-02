@@ -27,7 +27,7 @@ const char *get_mime_type(const char *path) {
 
 // HTTP 응답 전송 함수
 void send_http_response(int client_fd, const char *status, const char *headers, const char *body, int body_length) {
-    char response[8192];
+    char response[1024 * 1024];
     int length = snprintf(response, sizeof(response),
                           "HTTP/1.1 %s\r\n"
                           "%s"
@@ -147,7 +147,7 @@ void handle_http_request(Client *client) {
     http_parsing(client->recv_buffer, &http_request);
 
     // 메서드와 경로 출력 (디버그용)
-    printf("Received HTTP Request: %s %s\n", http_request.method, http_request.path);
+    // printf("Received HTTP Request: %s %s\n", http_request.method, http_request.path);
 
     // GET 메서드인지 확인
     if (strcasecmp(http_request.method, "GET") != 0) {

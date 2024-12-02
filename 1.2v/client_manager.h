@@ -9,6 +9,7 @@
 #define REQUEST_BUFFER_SIZE 1024 * 16 // 16KB
 #define STATIC_FILES_DIR "./static"
 
+
 typedef enum {
     CONNECTION_HANDSHAKE,  // 초기 핸드셰이크 단계
     CONNECTION_OPEN,       // WebSocket 연결 완료 상태
@@ -24,13 +25,16 @@ typedef struct Client {
     // websocket을 위해 추가한 것
     ConnectionState state;                      // 연결 상태
     char recv_buffer[REQUEST_BUFFER_SIZE];      // 수신 버퍼
-    ssize_t recv_buffer_len;                        // 수신 버퍼에 저장된 데이터 길이
+    size_t recv_buffer_len;                        // 수신 버퍼에 저장된 데이터 길이
+    bool incomplete_http;
+    bool incomplete_frame;
     
 } Client;
 
 // 클라이언트 매니저 구조체
 typedef struct {
     Client* head;                        // 연결 리스트의 시작점
+    TaskQueue* canvas_queue;             // 캔버스 Task Queue
     int server_socket;                   // 서버 소켓 파일 디스크립터
     int port_number;                     // 서버 포트 번호
     int epoll_fd;                        // epoll 인스턴스 파일 디스크립터
@@ -38,13 +42,16 @@ typedef struct {
     struct epoll_event *events;          // epoll에서 감지된 이벤트 리스트
     pthread_t tid;                       // 클라이언트 매니저 스레드
     TaskQueue *queue;                    // Task Queue
-    pthread_mutex_t lock;                // 뮤텍스
+    int client_count;                    // 접속한 클라이언트 수
+    pthread_spinlock_t lock;
 } ClientManager;
+
+int process_buffer(ClientManager *manager, Client *client, char *buffer, size_t len);
 
 int set_nonblocking(const int fd);
 
 // 클라이언트 매니저 초기화
-int initClientManager(ClientManager* manager, const int port, const int events_size, const int queue_size);
+int initClientManager(ClientManager* manager, TaskQueue *canvas_queue, const int port, const int events_size, const int queue_size);
 
 // 클라이언트 추가
 void addClient(ClientManager* manager);
@@ -53,12 +60,12 @@ void addClient(ClientManager* manager);
 int removeClient(ClientManager* manager, const int client_fd);
 
 // 모든 클라이언트에게 메시지 보내기
-void broadcastClients(ClientManager* manager, char* message);
+void broadcastClients(ClientManager* manager, char* message, size_t message_len);
 
 // 클라이언트 매니저 정리 (모든 클라이언트 제거 및 메모리 해제)
 void destroyClientManger(ClientManager* manager);
 
 // client_socket(파일 디스크립터)를 통해 client를 찾는 함수 
 Client* find_client(ClientManager* manager, int fd);
-
+int get_client_count(ClientManager* manager);
 #endif // CLIENT_MANAGER_H

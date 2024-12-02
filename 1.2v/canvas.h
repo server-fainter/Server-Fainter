@@ -3,21 +3,20 @@
 
 #include "task_queue.h"
 #include "include/uthash.h"
-#include <stdbool.h>
 #include "client_manager.h"
 
 // 픽셀 구조체
 typedef struct {
-    uint16_t x;
-    uint16_t y;
-    uint8_t color;
+    int x;
+    int y;
+    char color[8];
 } Pixel;
 
 // 수정된 픽셀 구조체
 typedef struct {
-    int key; // x * CANVAS_HEIGHT + y
-    uint8_t color;
-    UT_hash_handle hh; // uthash 핸들
+    int key;            // x * CANVAS_HEIGHT + y
+    char color[8];
+    UT_hash_handle hh;  // uthash 핸들
 } ModifiedPixel;
 
 // 캔버스 구조체
@@ -32,20 +31,13 @@ typedef struct {
 } Canvas;
 
 
-// 유효한 좌표인지 확인하는 함수
-bool is_valid_coordinate(int x, int y, int width, int height);
-
-// 유효한 HEX 색상인지 확인하는 함수
-bool is_valid_hex_color(const char *color);
+uint8_t *create_websocket_frame(uint8_t *payload_data, size_t payload_len, size_t *frame_len);
+void broadcast_updates(Canvas *canvas);
 
 // 캔버스 초기화 함수
 void init_canvas(Canvas *canvas, ClientManager *cm, int width, int height, int queue_size);
 
-// 픽셀 업데이트 처리 함수
-void process_pixel_update(Canvas *canvas, void *data);
-
-// 수정된 픽셀을 브로드캐스트하는 함수
-void broadcast_updates(Canvas *canvas);
-
+// 픽셀 업데이트 처리 함수(바이너리 데이터 처리)
+//void process_pixel_update(Canvas *canvas, void *data);
 
 #endif // CANVAS_H

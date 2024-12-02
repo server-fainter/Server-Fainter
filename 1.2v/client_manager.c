@@ -1,5 +1,6 @@
 #include "client_manager.h"
 
+#include "canvas.h"
 #include <http_handler.h>
 #include <sys/socket.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@
 #include <arpa/inet.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
+#include <stdbool.h>
 
 static void *worker_thread(void *arg) {
 
@@ -17,32 +19,107 @@ static void *worker_thread(void *arg) {
 
     ClientManager *cm = (ClientManager *)arg;
     TaskQueue *queue = cm->queue;
-    
 
     while (1) {
         Task task = pop_task(queue);
-        Client *client = task.client;
+        Client *client = find_client(cm, task.client);
 
         switch (task.type) {
             case TASK_NEW_CLIENT: {
+                //printf("TASK_NEW_CLIENT\n");
                 addClient(cm);
                 break;
             }
 
             case TASK_BROADCAST: {
-                broadcastClients(cm, task.data);
+                broadcastClients(cm, task.data, task.data_len);
                 break;
             }
 
-            case TASK_HTTP_REQUEST: {               
-                handle_http_request(client); // HTTP 요청 처리
-                client->recv_buffer_len = 0; // 버퍼 초기화
+            case TASK_FRAME_MESSAGE: {
+                //printf("TASK_FRAME_MESSAGE\n");
+                if (process_buffer(cm, client, (char *)task.data, task.data_len) == 0){
+
+                    // 버퍼 복사해서 캔버스한테 보내줌
+                    char *tmp = (char *)malloc(client->recv_buffer_len * sizeof(char));
+                    memcpy(tmp, client->recv_buffer, client->recv_buffer_len);
+                    Task pixel_task = {0, TASK_PIXEL_UPDATE, tmp, client->recv_buffer_len};
+                    push_task(cm->canvas_queue, pixel_task);
+                    client->recv_buffer_len = 0;
+                    client->incomplete_frame = false;
+                }
                 break;
             }
 
-            case TASK_CLIENT_CLOSE:{
-                removeClient(cm, client->socket_fd);
-                epoll_ctl(cm->epoll_fd, EPOLL_CTL_DEL, client->socket_fd, NULL);
+            case TASK_HTTP_REQUEST: {
+                //printf("TASK_HTTP_REQUEST\n");
+                if (process_buffer(cm, client, (char *)task.data, task.data_len) == 0) {
+                    handle_http_request(client); // HTTP 요청 처리
+                    client->recv_buffer_len = 0; // 버퍼 초기화
+                    client->incomplete_frame = false;
+                }
+                break;
+            }
+
+            case TASK_MESSAGE_INCOMPLETE_FRAME: {
+                //printf("TASK_MESSAGE_INCOMPLETE_FRAME\n");
+                if (process_buffer(cm, client, (char *)task.data, task.data_len) == 0) {
+                    client->incomplete_frame = true;
+                    // INCOMPLETE 보낸다음 클라이언트 상태 바꾼다음, 다음 버퍼(UNKNOWN_MESSAGE)를 기다린다
+                }
+                break;
+            }
+
+            case TASK_MESSAGE_INCOMPLETE_HTTP: {
+                //printf("TASK_MESSAGE_INCOMPLETE_HTTP\n");
+                if (process_buffer(cm, client, (char *)task.data, task.data_len) == 0) {
+                    client->incomplete_http = true;
+                    // INCOMPLETE 보낸다음 클라이언트 상태 바꾼다음, 다음 버퍼(TASK_FRAME_MESSAGE)를 기다린다
+                }
+                break;
+            }
+
+            case TASK_UNKNOWN_MESSAGE: {
+                //printf("TASK_UNKNOWN_MESSAGE\n");
+                if (client->incomplete_http == true) {
+                    if (process_buffer(cm, client, (char *)task.data, task.data_len) == 0) {
+                        handle_http_request(client); // HTTP 요청 처리
+                    }
+                    client->incomplete_http = false;
+                    client->recv_buffer_len = 0;
+                }
+                break;
+            }
+
+            case TASK_CLIENT_CLOSE :{
+                if (client != NULL) {
+                    removeClient(cm, client->socket_fd);
+                }
+
+                break;
+            }
+
+            case TASK_WEBSOCKET_CLOSE : {
+                if (client != NULL) {
+                    printf("웹소켓 접속 종료\n");
+
+                    // 종료 프레임 (Opcode: 0x8)
+                    unsigned char close_frame[4];
+                    close_frame[0] = 0x88;  // FIN bit + Opcode (0x8 for Close)
+                    close_frame[1] = 0x02;  // Payload length (2 bytes for close code)
+
+                    // 상태 코드를 네트워크 바이트 순서로 변환
+                    uint16_t close_code = htons(1000);
+                    memcpy(&close_frame[2], &close_code, sizeof(close_code));
+
+                    // 종료 프레임 전송
+                    if (send(client->socket_fd, close_frame, sizeof(close_frame), 0) < 0) {
+                        perror("Failed to send close frame");
+                    } else {
+                        // printf("Close frame sent with code: %d\n", close_code);
+                    }
+                    removeClient(cm, client->socket_fd);
+                }
                 break;
             }
 
@@ -52,7 +129,25 @@ static void *worker_thread(void *arg) {
         }
     }
 
-    return NULL;
+    pthread_exit(NULL);
+}
+
+int process_buffer(ClientManager *manager, Client *client, char *buffer, size_t len) {
+
+    // 수신된 데이터를 버퍼에 추가, 버퍼 크기 검사
+    if ((client->recv_buffer_len + len) < (REQUEST_BUFFER_SIZE * sizeof(char))){
+
+        memcpy(client->recv_buffer + client->recv_buffer_len, buffer, len); // 버퍼에 남아 있는 곳에서 부터 copy
+        client->recv_buffer_len += len; // 길이 갱신
+        free(buffer);
+        return 0;
+    }
+
+    fprintf(stderr, "클라이언트 버퍼 오버플로우 Client : %d\n", client->socket_fd);
+    // 에러 처리 (연결 종료)
+    removeClient(manager, client->socket_fd);
+    free(buffer);
+    return 1;
 }
 
 // 파일 디스크립터를 논블로킹 모드로 설정
@@ -73,15 +168,17 @@ int set_nonblocking(const int fd) {
 //클라이언트 매니저 초기화 함수
 int initClientManager(
     ClientManager* manager,
+    TaskQueue *canvas_queue,
     const int port,
     const int events_size,
     const int queue_size
-
     ) {
 
     printf("클라이언트 매니저 초기화 시작\n");
 
     manager->port_number = port;
+    manager->canvas_queue = canvas_queue;
+    manager->client_count = 0;
 
     // linked 리스트 초기화
     manager->head = NULL;
@@ -161,8 +258,6 @@ int initClientManager(
     }
     printf("서버 소켓 Epoll 등록 완료\n");
 
-    pthread_mutex_init(&manager->lock, NULL);
-
     // 스레드 생성
     const int n = pthread_create(&manager->tid, NULL, worker_thread, (void *)manager);
     if (n != 0) {
@@ -172,6 +267,8 @@ int initClientManager(
         exit(EXIT_FAILURE);
     }
     printf("클라이언트 매니저 스레드 생성 완료\n");
+
+    pthread_spin_init(&manager->lock, PTHREAD_PROCESS_SHARED);
 
     printf("클라이언트 매니저(서버) 초기화 완료 "
            "Port: %d, "
@@ -184,8 +281,6 @@ int initClientManager(
 
 // 클라이언트 추가
 void addClient(ClientManager* manager) {
-
-    pthread_mutex_lock(&manager->lock);
 
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
@@ -216,6 +311,8 @@ void addClient(ClientManager* manager) {
     Client* new_client = (Client*)malloc(sizeof(Client));
     if (!new_client) {
         perror("Failed to allocate memory for new client");
+        epoll_ctl(manager->epoll_fd, EPOLL_CTL_DEL, client_socket, NULL);
+        close(client_socket);
         return;
     }
 
@@ -225,22 +322,25 @@ void addClient(ClientManager* manager) {
     new_client->recv_buffer_len = 0;
     memset(new_client->recv_buffer, 0, sizeof(new_client->recv_buffer));
     new_client->next = NULL;
+    new_client->incomplete_frame = false;
+    new_client->incomplete_http = false;
 
     // 리스트의 맨 앞에 추가
     new_client->next = manager->head;
     manager->head = new_client;
 
-    printf("새로운 클라이언트 접속: IP = %s, Port = %d\n",
-        inet_ntoa(client_addr.sin_addr),
-        ntohs(client_addr.sin_port));
+    pthread_spin_lock(&manager->lock);
+    // 현재 접속한 클라이언트 수 증가
+    manager->client_count++;
+    pthread_spin_unlock(&manager->lock);
 
-    pthread_mutex_unlock(&manager->lock);
+    // printf("새로운 클라이언트 접속: IP = %s, Port = %d\n",
+    //     inet_ntoa(client_addr.sin_addr),
+    //     ntohs(client_addr.sin_port));
 }
 
 // 클라이언트 제거
 int removeClient(ClientManager* manager, const int client_fd) {
-
-    pthread_mutex_lock(&manager->lock);
 
     Client* current = manager->head;
     Client* prev = NULL;
@@ -252,46 +352,39 @@ int removeClient(ClientManager* manager, const int client_fd) {
             } else {
                 prev->next = current->next;
             }
+            epoll_ctl(manager->epoll_fd, EPOLL_CTL_DEL, client_fd, NULL);
             close(current->socket_fd);
             free(current);
-            printf("Client disconnected: FD %d\n", client_fd);
-
+            pthread_spin_lock(&manager->lock);
+            manager->client_count--;
+            pthread_spin_unlock(&manager->lock);
+            // printf("Client disconnected: FD %d\n", client_fd);
             return 0;
         }
         prev = current;
         current = current->next;
     }
 
-    pthread_mutex_unlock(&manager->lock);
-
     printf("Client with FD %d not found\n", client_fd);
     return -1;
 }
 
 // 모든 클라이언트에게 메시지 보내기
-void broadcastClients(ClientManager* manager, char* message) {
+void broadcastClients(ClientManager* manager, char* message, size_t message_len) {
 
-    size_t len = strlen(message);
-    char *buf = (char *)malloc(sizeof(char) * (len + 2));
-    strcpy(buf, message);
+    char *buf = (char *)malloc(sizeof(char) * message_len);
+    memcpy(buf, message, message_len);
     free(message);
 
-    buf[len] = '\n';      // 개행 문자 추가
-    buf[len + 1] = '\0';  // 문자열 종료 문자 추가
-
-    pthread_mutex_lock(&manager->lock);
-
     Client* current = manager->head;
-    while (current != NULL) {
-        // printf("broadcasting : %s\n", buf);
-        if (send(current->socket_fd, buf, len + 1, 0) == -1) {
+    while (current != NULL && current->state == CONNECTION_OPEN) {
+        // printf("broadcasting Client: %d\n", current->socket_fd);
+        if (send(current->socket_fd, buf, message_len, 0) == -1) {
             perror("Broadcast");
             // 에러 나도 무시
         }
         current = current->next;
     }
-
-    pthread_mutex_unlock(&manager->lock);
 
     free(buf);
 }
@@ -309,7 +402,6 @@ void destroyClientManger(ClientManager* manager) {
     }
     manager->head = NULL;
 
-    pthread_mutex_destroy(&manager->lock);
     close(manager->server_socket);
     close(manager->epoll_fd);
     free(manager->events);
@@ -318,19 +410,23 @@ void destroyClientManger(ClientManager* manager) {
 }
 
 Client* find_client(ClientManager* manager, int fd) {
-    
-    pthread_mutex_lock(&manager->lock);
 
     Client* current = manager->head;
     while (current != NULL) {
         if (current->socket_fd == fd) {
-            pthread_mutex_unlock(&manager->lock);
+
             return current;
         }
         current = current->next;
     }
 
-    pthread_mutex_unlock(&manager->lock);
     return NULL;
 }
 
+int get_client_count(ClientManager* manager) {
+
+    pthread_spin_lock(&manager->lock);
+    int count = manager->client_count;
+    pthread_spin_unlock(&manager->lock);
+    return count;
+}
