@@ -27,4 +27,11 @@ int accept_new_client(ServerManager *sm);
 // 서버 종료 함수
 void close_server(ServerManager *sm);
 
+//void send_canvas_update(int client_socket);
+void send_file_content(int client_socket, const char *file_path, const char *content_type);
+
+void handle_http_request(int client_socket, const char *buffer);
+
+void server_event_loop(ServerManager *sm) ;
+
 #endif // SERVER_H

@@ -9,7 +9,8 @@
 #include <sys/epoll.h>
 
 // HTTP 요청 처리 함수 선언
-void handle_http_request(int client_fd);
+void handle_http_request(int client_socket, const char *buffer);  // 수정된 선언
+
 
 int main() {
     // Context 구조체 초기화
