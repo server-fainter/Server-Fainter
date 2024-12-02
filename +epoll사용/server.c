@@ -69,7 +69,8 @@ void broadcast_canvas(unsigned char *message, size_t len) {
             } else {
                 continue;
             }
-
+            //iovec구조체와 writev를 통해 헤더 메세지 한번에 시스템 호출로 전송
+            // 지정된 소켓에 대해 iov배열에 있는 두개의 버퍼를 한번에 보냄
             struct iovec iov[2];
             iov[0].iov_base = header;
             iov[0].iov_len = header_size;
