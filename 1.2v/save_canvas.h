@@ -3,6 +3,6 @@
 
 #include "canvas.h"
 
-void save_canvas_as_json(Canvas *canvas, struct timeval time_val);
+void save_canvas_as_json(Canvas *canvas);
 
 #endif // SAVE_CANVAS_H

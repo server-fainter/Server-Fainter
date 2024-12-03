@@ -8,28 +8,13 @@
 #include <sys/types.h> // mode_t
 
 // JSON 파일로 캔버스 저장
-void save_canvas_as_json(Canvas *canvas, struct timeval time_val) {
+void save_canvas_as_json(Canvas *canvas) {
     
-    // 디렉토리 경로
-    const char *directory = "save";
-    
-    // 디렉토리 생성 (존재하지 않으면 생성)
-    struct stat st = {0};
-    if (stat(directory, &st) == -1) {
-        mkdir(directory, 0755); // 읽기, 쓰기, 실행 권한
-    }
+    // 타이밍 시작
+    clock_t start = clock();
 
     // 파일 이름 생성
-    char filename[256];
-    time_t raw_time = time_val.tv_sec; 
-    struct tm *t = localtime(&raw_time);
-
-    snprintf(filename, sizeof(filename),
-             "%s/canvas_%04d%02d%02d_%02d%02d%02d_%06ld.json",
-             directory,
-             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
-             t->tm_hour, t->tm_min, t->tm_sec,
-             time_val.tv_usec);
+    char *filename = "save.json";
 
     // JSON 객체 생성
     cJSON *root = cJSON_CreateObject();
@@ -55,6 +40,11 @@ void save_canvas_as_json(Canvas *canvas, struct timeval time_val) {
     } else {
         perror("JSON 파일 저장 실패");
     }
+
+    // 타이밍 끝
+    clock_t end = clock();
+    double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+    printf("JSON 저장 소요 시간: %f 초\n", time_taken);
 
     // 메모리 해제
     free(json_string);
