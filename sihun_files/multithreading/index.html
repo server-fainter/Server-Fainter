@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>r/place 클라이언트</title>
+    <style>
+        canvas {
+            border: 1px solid #000;
+            image-rendering: pixelated;
+        }
+        #color-picker {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>r/place 클라이언트</h1>
+    <canvas id="canvas" width="100" height="100"></canvas>
+    <div id="color-picker">
+        <label for="color">색상 선택:</label>
+        <select id="color">
+            <option value="0">흰색</option>
+            <option value="1">검은색</option>
+            <option value="2" selected>빨강</option>
+            <option value="3">초록</option>
+            <option value="4">파랑</option>
+            <option value="5">노랑</option>
+            <option value="6">청록</option>
+            <option value="7">자홍</option>
+        </select>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorInput = document.getElementById('color');
+
+        // 캔버스 크기를 확대하여 표시 (픽셀 확대 효과)
+        canvas.style.width = '500px';
+        canvas.style.height = '500px';
+
+        // 색상 인덱스를 RGB로 변환하는 함수 (8가지 색상 사용)
+        function colorToRGB(colorIndex) {
+            const colors = [
+                { r: 255, g: 255, b: 255 }, // 흰색
+                { r: 0, g: 0, b: 0 },       // 검은색
+                { r: 255, g: 0, b: 0 },     // 빨강
+                { r: 0, g: 255, b: 0 },     // 초록
+                { r: 0, g: 0, b: 255 },     // 파랑
+                { r: 255, g: 255, b: 0 },   // 노랑
+                { r: 0, g: 255, b: 255 },   // 청록
+                { r: 255, g: 0, b: 255 },   // 자홍
+            ];
+            return colors[colorIndex % colors.length];
+        }
+
+        // 캔버스 초기화
+        let pixelData = new Uint8Array(100 * 100 * 4); // RGBA 형식
+
+        // 캔버스 초기화: 모든 픽셀을 흰색으로 설정
+        for (let i = 0; i < pixelData.length; i += 4) {
+            pixelData[i] = 255;     // R
+            pixelData[i + 1] = 255; // G
+            pixelData[i + 2] = 255; // B
+            pixelData[i + 3] = 255; // A (불투명도)
+        }
+        updateCanvas();
+
+        // 서버에 연결
+        const ws = new WebSocket('ws://localhost:8080');
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = function() {
+            console.log('WebSocket 연결 성공');
+        };
+
+        ws.onmessage = function(event) {
+            const data = new Uint8Array(event.data);
+            let i = 0;
+            while (i + 2 < data.length) {
+                const x = data[i];
+                const y = data[i + 1];
+                const color = data[i + 2];
+                i += 3;
+
+                // 색상을 적용하여 픽셀 데이터 업데이트
+                const index = (y * 100 + x) * 4;
+                const rgbColor = colorToRGB(color);
+                pixelData[index] = rgbColor.r;
+                pixelData[index + 1] = rgbColor.g;
+                pixelData[index + 2] = rgbColor.b;
+                pixelData[index + 3] = 255; // 불투명도
+            }
+            updateCanvas();
+        };
+
+        ws.onclose = function() {
+            console.log('WebSocket 연결 종료');
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket 오류:', error);
+        };
+
+        // 캔버스에 클릭 이벤트 리스너 추가
+        canvas.addEventListener('click', function(event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor((event.clientX - rect.left) * scaleX);
+            const y = Math.floor((event.clientY - rect.top) * scaleY);
+
+            const color = parseInt(colorInput.value);
+
+            // 서버로 픽셀 정보 전송
+            const message = new Uint8Array([x, y, color]);
+
+            // WebSocket 프레임 작성 (클라이언트에서는 자동 처리되므로 그냥 보내면 됨)
+            ws.send(message.buffer);
+        });
+
+        // 캔버스 업데이트 함수
+        function updateCanvas() {
+            const imageData = new ImageData(new Uint8ClampedArray(pixelData), 100, 100);
+            ctx.putImageData(imageData, 0, 0);
+        }
+    </script>
+</body>
+</html>

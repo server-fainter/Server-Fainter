@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>fainter 클라이언트</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            text-align: center;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            border: 2px solid #000;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            width: 500px;
+            height: 500px;
+            image-rendering: pixelated;
+        }
+
+        #color-picker {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        #color-picker label {
+            font-size: 1.2rem;
+            color: #555;
+        }
+
+        #color-picker input[type="color"] {
+            width: 40px;
+            height: 40px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            padding: 0;
+        }
+
+        #recent-colors {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .color-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 5px;
+            border: 2px solid #ccc;
+        }
+
+        .hovered {
+            box-shadow: 0 0 10px 5px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FAINTER CANVAS</h1>
+        <canvas id="canvas" width="100" height="100"></canvas>
+        <div id="color-picker">
+            <label for="color">🎨 색상 선택:</label>
+            <input type="color" id="color" value="#ff0000">
+        </div>
+        <div id="recent-colors">
+            <!-- 최근 색상들이 여기에 표시됩니다 -->
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorInput = document.getElementById('color');
+        const recentColorsContainer = document.getElementById('recent-colors');
+        
+        // 최근 색상 스택 (최대 5개)
+        let recentColors = [];
+
+        // 캔버스 크기를 확대하여 표시 (픽셀 확대 효과)
+        canvas.style.width = '500px';  // 화면에 보여지는 크기
+        canvas.style.height = '500px'; // 화면에 보여지는 크기
+        canvas.width = 100;            // 실제 캔버스 크기
+        canvas.height = 100;           // 실제 캔버스 크기
+
+        // 캔버스 초기화
+        let pixelData = new Uint8Array(100 * 100 * 4); // RGBA 형식
+
+        // 캔버스 초기화: 모든 픽셀을 흰색으로 설정
+        for (let i = 0; i < pixelData.length; i += 4) {
+            pixelData[i] = 255;     // R
+            pixelData[i + 1] = 255; // G
+            pixelData[i + 2] = 255; // B
+            pixelData[i + 3] = 255; // A (불투명도)
+        }
+        updateCanvas();
+
+        // 서버에 연결
+        const ws = new WebSocket('ws://localhost:8080');
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = function () {
+            console.log('WebSocket 연결 성공');
+        };
+
+        ws.onmessage = function (event) {
+            const data = new Uint8Array(event.data);
+            let i = 0;
+            while (i + 2 < data.length) {
+                const x = data[i];
+                const y = data[i + 1];
+                const color = data[i + 2];
+                i += 3;
+
+                // 색상을 적용하여 픽셀 데이터 업데이트
+                const index = (y * 100 + x) * 4;
+                const rgbColor = colorToRGB(color);
+                pixelData[index] = rgbColor.r;
+                pixelData[index + 1] = rgbColor.g;
+                pixelData[index + 2] = rgbColor.b;
+                pixelData[index + 3] = 255; // 불투명도
+            }
+            updateCanvas();
+        };
+
+        ws.onclose = function () {
+            console.log('WebSocket 연결 종료');
+        };
+
+        ws.onerror = function (error) {
+            console.error('WebSocket 오류:', error);
+        };
+
+        // 호버한 픽셀에 그림자 효과 적용
+        let hoveredPixel = { x: -1, y: -1 };
+        
+        canvas.addEventListener('mousemove', function (event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor((event.clientX - rect.left) * scaleX);
+            const y = Math.floor((event.clientY - rect.top) * scaleY);
+            
+            if (hoveredPixel.x !== x || hoveredPixel.y !== y) {
+                hoveredPixel = { x, y };
+                updateCanvas();  // 호버 시 캔버스 다시 업데이트
+            }
+        });
+
+        canvas.addEventListener('click', function (event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;  // 캔버스의 실제 크기 대비 스타일 크기 비율
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor((event.clientX - rect.left) * scaleX);
+            const y = Math.floor((event.clientY - rect.top) * scaleY);
+
+            // 색상 변환
+            const colorHex = colorInput.value;
+            const rgbColor = hexToRGB(colorHex);
+
+            // 서버로 픽셀 정보 전송
+            const message = new Uint8Array([x, y, rgbColor.r, rgbColor.g, rgbColor.b]);
+            ws.send(message.buffer);
+
+            // 최근 색상 스택 업데이트
+            updateRecentColors(colorHex);
+            console.log(message.buffer)
+        });
+
+        // 헥사 색상을 RGB로 변환하는 함수
+        function hexToRGB(hex) {
+            const r = parseInt(hex.substr(1, 2), 16);
+            const g = parseInt(hex.substr(3, 2), 16);
+            const b = parseInt(hex.substr(5, 2), 16);
+            return { r, g, b };
+        }
+
+        // 캔버스 업데이트 함수
+        function updateCanvas() {
+            const imageData = new ImageData(new Uint8ClampedArray(pixelData), 100, 100);
+            ctx.putImageData(imageData, 0, 0);
+
+            // 호버된 픽셀에 그림자 효과 추가
+            if (hoveredPixel.x >= 0 && hoveredPixel.y >= 0) {
+                const index = (hoveredPixel.y * 100 + hoveredPixel.x) * 4;
+                ctx.save();
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
+                ctx.shadowBlur = 5;
+                ctx.shadowColor = "rgba(0, 0, 0, 0.7)";  // 그림자 색상 설정
+                ctx.fillStyle = `rgb(${pixelData[index]}, ${pixelData[index + 1]}, ${pixelData[index + 2]})`;
+                ctx.fillRect(hoveredPixel.x * 5, hoveredPixel.y * 5, 5, 5);  // 확대된 크기로 그림자 효과
+                ctx.restore();
+            }
+        }
+
+        // 최근 색상 업데이트 함수
+        function updateRecentColors(color) {
+            if (recentColors.length >= 5) {
+                recentColors.shift();  // 스택의 크기가 5개를 초과하면 가장 오래된 색상을 제거
+            }
+            recentColors.push(color);  // 새로운 색상 추가
+
+            // 최근 색상 표시 업데이트
+            recentColorsContainer.innerHTML = '';
+            recentColors.forEach(c => {
+                const colorBox = document.createElement('div');
+                colorBox.classList.add('color-box');
+                colorBox.style.backgroundColor = c;
+                recentColorsContainer.appendChild(colorBox);
+            });
+        }
+    </script>
+</body>
+</html>
