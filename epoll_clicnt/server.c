@@ -14,17 +14,30 @@
 #include <openssl/sha.h>
 #include <openssl/evp.h>
 #include <sys/epoll.h>
-#include <sys/uio.h> // writev 함수 사용을 위한 헤더 추가
+#include <sys/uio.h>
+#include <sys/time.h>
+#include <time.h>
+#include <signal.h>
+
 
 #define PORT 8080
-#define WIDTH 100
-#define HEIGHT 100
+#define WIDTH 500
+#define HEIGHT 500
 #define BUFFER_SIZE 8192
-#define MAX_CLIENTS 1000
-#define MAX_EVENTS 1000
+#define MAX_CLIENTS 10000
+#define MAX_EVENTS 10000
+#define CANVAS_FILE "canvas.dat"
+#define SAVE_INTERVAL 60 // 60초마다 저장
+
+#define MSG_TYPE_CANVAS_UPDATE 1
+#define MSG_TYPE_CLIENT_COUNT  2
+FILE *log_file;
+pthread_mutex_t log_file_mutex;
 
 static uint8_t canvas[WIDTH][HEIGHT];
 static pthread_mutex_t canvas_mutex;
+
+unsigned clientCnt=0;
 
 // 클라이언트 구조체
 typedef struct {
@@ -39,55 +52,226 @@ typedef struct {
 client_t clients[MAX_CLIENTS];
 pthread_mutex_t clients_mutex;
 
-// 모든 클라이언트에게 메시지 브로드캐스트하는 함수
-void broadcast_to_clients(unsigned char *message, size_t len) {
+// 캔버스 저장 함수
+int save_canvas_to_file(const char *filename) {
+    const char *temp_filename = "canvas.tmp";
+    FILE *fp = fopen(temp_filename, "wb");
+    if (!fp) {
+        perror("Failed to open temporary canvas file for writing");
+        return -1;
+    }
+
+    pthread_mutex_lock(&canvas_mutex);
+    size_t written = fwrite(canvas, sizeof(uint8_t), WIDTH * HEIGHT, fp);
+    pthread_mutex_unlock(&canvas_mutex);
+
+    fclose(fp);
+
+    if (written != WIDTH * HEIGHT) {
+        fprintf(stderr, "Failed to write complete canvas data to temporary file\n");
+        return -1;
+    }
+
+    // 임시 파일을 실제 파일로 교체 , 데이터 손실 방지
+    if (rename(temp_filename, filename) != 0) {
+        perror("Failed to rename temporary canvas file");
+        return -1;
+    }
+
+    return 0;
+}
+// 모든 클라이언트의 동접자 수를 브로트 캐스트 하는 함수
+void broadcast_client_count(unsigned int clientCnt) {
     pthread_mutex_lock(&clients_mutex);
+
+    unsigned char message[5]; 
+    message[0] = 0x02; // 메시지 타입: 동접자 수
+    message[1] = (clientCnt >> 24) & 0xFF;
+    message[2] = (clientCnt >> 16) & 0xFF;
+    message[3] = (clientCnt >> 8) & 0xFF;
+    message[4] = clientCnt & 0xFF;
+
+    size_t len = sizeof(message);
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (clients[i].active && clients[i].handshake_done) {
             int client_fd = clients[i].socket_fd;
-            uint8_t header[10];
+            // WebSocket 프레임 작성
+
+            uint8_t header[14];
             size_t header_size = 0;
             header[0] = 0x82; // FIN 비트 설정, 바이너리 프레임
 
             if (len <= 125) {
                 header[1] = len;
                 header_size = 2;
-            } 
-            else if (len <= 65535) {
+            } else if (len <= 65535) {
                 header[1] = 126;
                 header[2] = (len >> 8) & 0xFF;
                 header[3] = len & 0xFF;
                 header_size = 4;
-            } 
-            else {
-                // 너무 큰 메시지는 처리하지 않음
+            } else {
                 continue;
             }
 
             struct iovec iov[2];
-            iov[0].iov_base = header; //시작포인터
-            iov[0].iov_len = header_size;//길이
-            iov[1].iov_base = message;//ㅅㅣ작포인터
-            iov[1].iov_len = len;//길이
+            iov[0].iov_base = header;
+            iov[0].iov_len = header_size;
+            iov[1].iov_base = message;
+            iov[1].iov_len = len;
 
-            ssize_t sent_bytes = writev(client_fd, iov, 2); //헤더랑 메세지를  한번에 보냄
+            ssize_t sent_bytes = writev(client_fd, iov, 2);
             if (sent_bytes < 0) {
-                perror("Failed to send to client");
+                perror("Failed to send client count");
                 clients[i].active = 0;
                 close(clients[i].socket_fd);
+                clientCnt--;
+                printf("동접자 수:%d(나감)\n",clientCnt);
+                broadcast_client_count(clientCnt);
                 printf("Closed connection with %s:%d due to send failure\n",
                        inet_ntoa(clients[i].address.sin_addr),
                        ntohs(clients[i].address.sin_port));
                 continue;
             }
 
-            printf("Broadcasted %zu bytes to %s:%d\n", len,
+            printf("Broadcasted client count (%u) to %s:%d\n", clientCnt,
                    inet_ntoa(clients[i].address.sin_addr),
                    ntohs(clients[i].address.sin_port));
         }
     }
     pthread_mutex_unlock(&clients_mutex);
 }
+
+// 캔버스 로드 함수
+int load_canvas_from_file(const char *filename) {
+    FILE *fp = fopen(filename, "rb");
+    if (!fp) {
+        // 파일이 없으면 초기화된 상태를 유지
+        printf("Canvas file not found. Initializing with default values.\n");
+        return 0;
+    }
+
+    size_t read = fread(canvas, sizeof(uint8_t), WIDTH * HEIGHT, fp);
+    fclose(fp);
+
+    if (read != WIDTH * HEIGHT) {
+        fprintf(stderr, "Failed to read complete canvas data. Initializing with default values.\n");
+        memset(canvas, 0, sizeof(canvas));
+        return -1;
+    }
+
+    printf("Canvas loaded from file successfully.\n");
+    return 0;
+}
+
+// 주기적으로 캔버스 저장하는 함수
+void *save_canvas_periodically(void *arg) {
+    while (1) {
+        sleep(SAVE_INTERVAL);
+        if (save_canvas_to_file(CANVAS_FILE) == 0) {
+            printf("Canvas saved successfully.\n");
+        } 
+        else {
+            printf("Failed to save canvas.\n");
+        }
+    }
+    return NULL;
+}
+
+// 모든 클라이언트에게 메시지 브로드캐스트하는 함수
+void broadcast_to_clients(unsigned char *pixel_updates, size_t len) {
+    pthread_mutex_lock(&clients_mutex);
+    struct timeval t1, t2;
+    double elapsedTime;
+    gettimeofday(&t1, NULL);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i].active && clients[i].handshake_done) {
+            int client_fd = clients[i].socket_fd;
+
+            // 메시지 타입 0x01 추가
+            unsigned char *message = malloc(len + 1);
+            if (!message) {
+                perror("Failed to allocate memory for message");
+                continue;
+            }
+            message[0] = 0x01;
+            memcpy(message + 1, pixel_updates, len);
+            size_t total_len = len + 1;
+
+            // WebSocket 프레임 작성
+            uint8_t header[14];
+            size_t header_size = 0;
+            header[0] = 0x82; // FIN 비트 설정, 바이너리 프레임
+
+            if (total_len <= 125) {
+                header[1] = total_len;
+                header_size = 2;
+            } else if (total_len <= 65535) {
+                header[1] = 126;
+                header[2] = (total_len >> 8) & 0xFF;
+                header[3] = total_len & 0xFF;
+                header_size = 4;
+            } else {
+                header[1] = 127;
+                for (int j = 0; j < 8; j++) {
+                    header[2 + j] = (total_len >> (56 - 8 * j)) & 0xFF;
+                }
+                header_size = 10;
+            }
+
+            struct iovec iov[2];
+            iov[0].iov_base = header;
+            iov[0].iov_len = header_size;
+            iov[1].iov_base = message;
+            iov[1].iov_len = total_len;
+
+            ssize_t sent_bytes = writev(client_fd, iov, 2);
+            if (sent_bytes < 0) {
+                perror("Failed to send to client");
+                clients[i].active = 0;
+                close(clients[i].socket_fd);
+                clientCnt--;
+                printf("동접자 수:%d(나감)\n",clientCnt);
+                broadcast_client_count(clientCnt);
+                printf("Closed connection with %s:%d due to send failure\n",
+                       inet_ntoa(clients[i].address.sin_addr),
+                       ntohs(clients[i].address.sin_port));
+                free(message);
+                continue;
+            }
+
+            printf("Broadcasted %zu bytes to %s:%d\n", total_len,
+                   inet_ntoa(clients[i].address.sin_addr),
+                   ntohs(clients[i].address.sin_port));
+            free(message);
+        }
+    }
+    
+    pthread_mutex_unlock(&clients_mutex);
+    gettimeofday(&t2, NULL);
+    elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;      
+    elapsedTime += ((t2.tv_usec - t1.tv_usec) / 1000.0); 
+    printf("broadcast_to_clients 수행시간: %f ms\n", elapsedTime);
+
+    pthread_mutex_lock(&log_file_mutex);
+    if (log_file) {
+        // 현재 시간 가져오기
+        time_t now = time(NULL);
+        struct tm *tm_info = localtime(&now);
+        char timestamp[26];
+        strftime(timestamp, 26, "%Y-%m-%d %H:%M:%S", tm_info);
+
+        // 클라이언트 수 가져오기 (스레드 안전하게)
+        pthread_mutex_lock(&clients_mutex);
+        unsigned int current_client_count = clientCnt;
+        pthread_mutex_unlock(&clients_mutex);
+
+        // CSV 형식으로 기록: timestamp,client_count,elapsed_time_ms
+        fprintf(log_file, "%s,%u,%.3f\n", timestamp, current_client_count, elapsedTime);
+        fflush(log_file);
+    }
+    pthread_mutex_unlock(&log_file_mutex);
+}
+
 
 // Base64 인코딩 함수 구현, handshake 함수에서 사용
 void base64_encode(const unsigned char *input, int length, char *output, int output_size) {
@@ -156,41 +340,41 @@ int websocket_handshake(client_t *cli) {
     }
 
     // Sec-WebSocket-Key 추출
-    char *key_header = strstr(buffer, "Sec-WebSocket-Key: "); //key의 시작주소값
+    char *key_header = strstr(buffer, "Sec-WebSocket-Key: ");
     if (!key_header) {
         printf("Sec-WebSocket-Key header not found.\n");
         return -1;
     }
 
-    key_header += strlen("Sec-WebSocket-Key: "); //key의 시작주소값에 key의 길이만큼 더함 -> 키값의 시작주소값
-    char *key_end = strstr(key_header, "\r\n"); //키의 끝주소값
+    key_header += strlen("Sec-WebSocket-Key: ");
+    char *key_end = strstr(key_header, "\r\n");
     if (!key_end) {
         printf("Sec-WebSocket-Key header end not found.\n");
         return -1;
     }
 
     char client_key[256];
-    size_t key_len = key_end - key_header; //키의 길이
-    if (key_len >= sizeof(client_key)) { //버퍼오버플로우 방지
-        key_len = sizeof(client_key) - 1; //버퍼의 마지막에 널문자를 넣어줘야 하기 때문에 -1, 잘못된 헤어가 왔을 때.
+    size_t key_len = key_end - key_header;
+    if (key_len >= sizeof(client_key)) {
+        key_len = sizeof(client_key) - 1;
     }
     strncpy(client_key, key_header, key_len);
     client_key[key_len] = '\0';
 
     // GUID와 합친 후 SHA-1 해싱 및 Base64 인코딩
     const char *guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    char key_guid[300]; // 버퍼 크기 증가, key와 guid를 합친 후 해싱하기 때문에
-    int n = snprintf(key_guid, sizeof(key_guid), "%s%s", client_key, guid); //key와 guid를 합침
+    char key_guid[300];
+    int n = snprintf(key_guid, sizeof(key_guid), "%s%s", client_key, guid);
     if (n < 0 || n >= sizeof(key_guid)) {
         fprintf(stderr, "key_guid buffer overflow\n");
         return -1;
     }
 
-    unsigned char sha1_result[SHA_DIGEST_LENGTH]; //SHA-1 해시 결과를 저장할 버퍼
-    sha1_hash(key_guid, strlen(key_guid), sha1_result); //SHA-1 해싱
+    unsigned char sha1_result[SHA_DIGEST_LENGTH];
+    sha1_hash(key_guid, strlen(key_guid), sha1_result);
 
     char accept_key[256];
-    base64_encode(sha1_result, SHA_DIGEST_LENGTH, accept_key, sizeof(accept_key)); //해싱된 결과를 base64로 인코딩
+    base64_encode(sha1_result, SHA_DIGEST_LENGTH, accept_key, sizeof(accept_key));
 
     // 응답 헤더 생성 및 전송
     char response[512];
@@ -208,6 +392,9 @@ int websocket_handshake(client_t *cli) {
     ssize_t sent = send(cli->socket_fd, response, strlen(response), 0);
     if (sent < 0) {
         perror("send failed");
+        clientCnt--;
+        printf("동접자 수:%d(나감)\n",clientCnt);
+        broadcast_client_count(clientCnt);
         return -1;
     }
 
@@ -222,7 +409,6 @@ ssize_t process_websocket_frame(client_t *cli) {
     size_t buffer_len = cli->buffer_offset;
     size_t payload_len = 0;
     size_t header_len = 2;
-
     if (buffer_len < 2) {
         // 헤더가 완전하지 않음
         return 0;
@@ -231,7 +417,6 @@ ssize_t process_websocket_frame(client_t *cli) {
     uint8_t opcode = buffer[0] & 0x0F;
     uint8_t masked = (buffer[1] & 0x80) != 0;
     payload_len = buffer[1] & 0x7F;
-
     if (payload_len == 126) { 
         header_len += 2;
         if (buffer_len < header_len) return 0;
@@ -246,9 +431,9 @@ ssize_t process_websocket_frame(client_t *cli) {
         }
     }
 
-    size_t masking_key_offset = header_len; // 마스킹 키의 시작 위치
+    size_t masking_key_offset = header_len; // 2
     if (masked) {
-        header_len += 4; // 마스킹 키 길이가 4바이트이므로 헤더 길이에 4를 더함
+        header_len += 4;
     }
 
     size_t total_frame_len = header_len + payload_len;
@@ -257,12 +442,12 @@ ssize_t process_websocket_frame(client_t *cli) {
         return 0; 
     }
 
-    uint8_t *payload_data = buffer + header_len; // 페이로드 데이터의 시작 위치
+    uint8_t *payload_data = buffer + header_len;
 
     if (masked) {
         uint8_t *masking_key = buffer + masking_key_offset;
         for (size_t i = 0; i < payload_len; i++) {
-            payload_data[i] ^= masking_key[i % 4]; // 마스킹 키로 XOR 연산
+            payload_data[i] ^= masking_key[i % 4];
         }
     }
 
@@ -272,15 +457,23 @@ ssize_t process_websocket_frame(client_t *cli) {
         printf("Client disconnected: %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
         close(cli->socket_fd);
         cli->active = 0;
+        clientCnt--;
+        printf("동접자 수:%d(나감)\n",clientCnt);
+        broadcast_client_count(clientCnt);
         return total_frame_len;
-    } else if (opcode == 0x2) {
+    } 
+    else if (opcode == 0x2) {
         // 바이너리 메시지 처리
+        printf("Received binary message from %s:%d - Payload Length: %zu\n", 
+               inet_ntoa(cli->address.sin_addr), 
+               ntohs(cli->address.sin_port), 
+               payload_len);
         size_t i = 0;
-        while (i + 2 < payload_len) { // 3바이트씩 처리
-            uint8_t x = payload_data[i];
-            uint8_t y = payload_data[i + 1];
-            uint8_t color = payload_data[i + 2];
-            i += 3;
+        while (i + 5 <= payload_len) { // 5바이트씩 처리 (x: 2바이트, y: 2바이트, color: 1바이트)
+            uint16_t x = payload_data[i] | (payload_data[i + 1] << 8); 
+            uint16_t y = payload_data[i + 2] | (payload_data[i + 3] << 8);
+            uint8_t color = payload_data[i + 4];
+            i += 5;
 
             if (x < WIDTH && y < HEIGHT) {
                 pthread_mutex_lock(&canvas_mutex);
@@ -288,8 +481,13 @@ ssize_t process_websocket_frame(client_t *cli) {
                 pthread_mutex_unlock(&canvas_mutex);
 
                 // 변경 사항을 모든 클라이언트에게 브로드캐스트
-                unsigned char msg[3] = { x, y, color };
-                broadcast_to_clients(msg, 3);
+                unsigned char msg[5];
+                msg[0] = x & 0xFF;
+                msg[1] = (x >> 8) & 0xFF;
+                msg[2] = y & 0xFF;
+                msg[3] = (y >> 8) & 0xFF;
+                msg[4] = color;
+                broadcast_to_clients(msg, 5);
 
                 printf("Updated pixel (%d, %d) to color %d\n", x, y, color);
             }
@@ -340,16 +538,50 @@ int setup_server(int port) {
     return server_fd;
 }
 
+void cleanup(int signum) {
+    // 로그 파일 닫기
+    pthread_mutex_lock(&log_file_mutex);
+    if (log_file) {
+        fclose(log_file);
+        log_file = NULL;
+    }
+    pthread_mutex_unlock(&log_file_mutex);
+
+    // 기타 자원 해제
+    // 필요한 경우 다른 뮤텍스 파괴, 소켓 닫기 등 수행
+
+    exit(0);
+}
+
 int main(void) {
     int server_fd, epoll_fd;
     struct epoll_event event, events[MAX_EVENTS];
+    pthread_t save_thread;
+    pthread_mutex_init(&log_file_mutex, NULL);
+    log_file = fopen("broadcast_log.csv", "w");
+    if (!log_file) {
+        perror("Failed to open log file");
+        return -1;
+    }
+    // CSV 헤더 추가
+    fprintf(log_file, "timestamp,client_count,elapsed_time_ms\n");
+    fflush(log_file);
+
+    // SIGINT 시그널 처리기 설정
+    signal(SIGINT, cleanup);
+    
 
     printf("Server is running on port %d\n", PORT);
 
     pthread_mutex_init(&canvas_mutex, NULL);
     pthread_mutex_init(&clients_mutex, NULL);
-    memset(canvas, 0, sizeof(canvas));
+    memset(canvas, 29, sizeof(canvas));
     memset(clients, 0, sizeof(clients));
+
+    // 서버 시작 전에 캔버스 데이터 로드
+    if (load_canvas_from_file(CANVAS_FILE) != 0) {
+        printf("Starting with default canvas.\n");
+    }
 
     server_fd = setup_server(PORT);
     if (server_fd < 0) {
@@ -376,6 +608,12 @@ int main(void) {
         close(server_fd);
         close(epoll_fd);
         return -1;
+    }
+
+    // 캔버스 저장을 주기적으로 수행하는 스레드 생성
+    if (pthread_create(&save_thread, NULL, save_canvas_periodically, NULL) != 0) {
+        perror("Turn off the server, Failed to create save thread");
+        // 계속 진행하되, 저장이 되지 않을 것임을 경고
     }
 
     while (1) {
@@ -431,6 +669,9 @@ int main(void) {
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event) == -1) {
                             perror("epoll_ctl: client_fd");
                             close(client_fd);
+                            clientCnt--;
+                            printf("동접자 수:%d(나감)\n",clientCnt);
+                            broadcast_client_count(clientCnt);
                             clients[idx].active = 0;
                         } 
                         else {
@@ -451,7 +692,7 @@ int main(void) {
                 client_t *cli = NULL;
 
                 pthread_mutex_lock(&clients_mutex);
-                for (int j = 0; j < MAX_CLIENTS; j++) { //클라이언트를 찾음
+                for (int j = 0; j < MAX_CLIENTS; j++) {
                     if (clients[j].active && clients[j].socket_fd == client_fd) {
                         cli = &clients[j];
                         break;
@@ -468,32 +709,31 @@ int main(void) {
                 if (events[i].events & EPOLLIN) { 
                     if (!cli->handshake_done) {
                         // 핸드셰이크 수행
-                        if (websocket_handshake(cli) == 0) { //처음엔 핸드쉐이크를 수행
-                            cli->handshake_done = 1;
-
-                            // 초기 캔버스 데이터 전송
+                        if (websocket_handshake(cli) == 0) {
                             pthread_mutex_lock(&canvas_mutex);
-                            size_t init_len = WIDTH * HEIGHT * 3;
-                            unsigned char *init_msg = malloc(init_len);
+                            cli->handshake_done = 1;
+                            size_t init_len = WIDTH * HEIGHT * 5;
+                            unsigned char *init_msg = malloc(init_len + 1); // +1 for message type
                             if (!init_msg) {
-                                perror("Failed to allocate memory for init_msg");
-                                pthread_mutex_unlock(&canvas_mutex);
-                                close(cli->socket_fd);
-                                cli->active = 0;
-                                continue;
-                            }
-                            size_t index = 0;
-                            for (uint8_t y = 0; y < HEIGHT; y++) {
-                                for (uint8_t x = 0; x < WIDTH; x++) {
-                                    init_msg[index++] = x;
-                                    init_msg[index++] = y;
-                                    init_msg[index++] = canvas[x][y];
+                              perror("Failed to allocate memory for init_msg");
+                              // Handle error
+                              }
+                              init_msg[0] = 0x01; // 메시지 타입: 픽셀 업데이트
+                              size_t index = 1;
+                              for (uint16_t y = 0; y < HEIGHT; y++) {
+                                for (uint16_t x = 0; x < WIDTH; x++) {
+                                  init_msg[index++] = x & 0xFF;
+                                  init_msg[index++] = (x >> 8) & 0xFF;
+                                  init_msg[index++] = y & 0xFF;
+                                  init_msg[index++] = (y >> 8) & 0xFF;
+                                  init_msg[index++] = canvas[x][y];
                                 }
-                            }
+                              }
                             pthread_mutex_unlock(&canvas_mutex);
+                        
 
                             // WebSocket 프레임 작성 및 전송
-                            uint8_t header[10];
+                            uint8_t header[14];
                             size_t header_size = 0;
                             header[0] = 0x82; // FIN 비트 설정, 바이너리 프레임
 
@@ -508,11 +748,11 @@ int main(void) {
                                 header_size = 4;
                             } 
                             else {
-                                // 너무 큰 메시지는 처리하지 않음
-                                free(init_msg);
-                                close(cli->socket_fd);
-                                cli->active = 0;
-                                continue;
+                                header[1] = 127;
+                                for (int j = 0; j < 8; j++) {
+                                    header[2 + j] = (init_len >> (56 - 8*j)) & 0xFF;
+                                }
+                                header_size = 10;
                             }
 
                             struct iovec iov[2];
@@ -527,17 +767,23 @@ int main(void) {
                                 free(init_msg);
                                 close(cli->socket_fd);
                                 cli->active = 0;
+                                clientCnt--;
+                                printf("동접자 수:%d(나감)\n",clientCnt);
+                                broadcast_client_count(clientCnt);
                                 continue;
                             }
 
                             printf("Initial canvas sent to %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
+                            clientCnt++;
+                            printf("동접자 수:%d(들어옴)\n",clientCnt);
+                            broadcast_client_count(clientCnt);
                             free(init_msg);
                         } 
                         else {
                             // 핸드셰이크 실패
                             printf("Handshake failed with %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                             close(cli->socket_fd);
-                            cli->active = 0;
+                            broadcast_client_count(clientCnt);
                         }
                     } 
                     else {
@@ -553,30 +799,36 @@ int main(void) {
                                     // 처리된 프레임을 버퍼에서 제거
                                     memmove(cli->buffer, cli->buffer + frame_len, cli->buffer_offset - frame_len);
                                     cli->buffer_offset -= frame_len;
-                                } else if (frame_len == 0) {
+                                } 
+                                else if (frame_len == 0) {
                                     // 더 이상 처리할 프레임이 없음
                                     break;
-                                } else {
+                                } 
+                                else {
                                     // 오류 발생
                                     printf("Error processing frame for %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                                     close(cli->socket_fd);
                                     cli->active = 0;
+                                    clientCnt--;
+                                    printf("동접자 수:%d(나감)\n",clientCnt);
+                                    broadcast_client_count(clientCnt);
                                     break;
                                 }
                             }
                         }
 
                         if (bytes_read == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                            // 오류 발생
-                            perror("recv");
-                            close(cli->socket_fd);
-                            cli->active = 0;
-                        } else if (bytes_read == 0) {
+                            // 오류 발생, 다른데와 중복처리해서 우선 뺌
+                        } 
+                        else if (bytes_read == 0) {
                             // 클라이언트 연결 종료
                             printf("Client disconnected: %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                             close(cli->socket_fd);
-                            cli->active = 0;
+                            cli->active = 0;clientCnt--;
+                            printf("동접자 수:%d(나감)\n",clientCnt);
+                            broadcast_client_count(clientCnt);
                         }
+                        
                     }
                 }
                 if (events[i].events & (EPOLLHUP | EPOLLERR)) {
@@ -584,15 +836,31 @@ int main(void) {
                     printf("Client disconnected (EPOLLHUP/EPOLLERR): %s:%d\n", inet_ntoa(cli->address.sin_addr), ntohs(cli->address.sin_port));
                     close(cli->socket_fd);
                     cli->active = 0;
+                    clientCnt--;
+                    printf("동접자 수:%d(나감)\n",clientCnt);
+                    broadcast_client_count(clientCnt);
                 }
             }
         }
     }
-        // 정리
-        close(server_fd);
-        close(epoll_fd);
-        pthread_mutex_destroy(&canvas_mutex);
-        pthread_mutex_destroy(&clients_mutex);
 
-        return 0;
+    // 루프 종료 시 캔버스 저장, while루프를 탈출하는 방법을 넣어야함..
+        
+    if (save_canvas_to_file(CANVAS_FILE) == 0) {
+        printf("Canvas saved successfully on shutdown.\n");
+    } 
+    else {
+        printf("Failed to save canvas on shutdown.\n");
+    }
+
+    // 저장 스레드 종료 대기 (실제로는 이 지점에 도달하지 않음)
+    pthread_cancel(save_thread);
+    pthread_join(save_thread, NULL);
+    // 정리
+    close(server_fd);
+    close(epoll_fd);
+    pthread_mutex_destroy(&canvas_mutex);
+    pthread_mutex_destroy(&clients_mutex);
+
+    return 0;
 }
