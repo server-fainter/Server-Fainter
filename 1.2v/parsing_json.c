@@ -42,7 +42,7 @@ Pixel *parse_pixel_json(const char *json_str) {
         return NULL;
     }
 
-    Pixel *parsed_pixel = (Pixel *)malloc(sizeof(Pixel));
+    Pixel *parsed_pixel = malloc(sizeof(Pixel));
     if (parsed_pixel == NULL) {
         fprintf(stderr, "Failed to allocate memory for Pixel.\n");
         cJSON_Delete(json);

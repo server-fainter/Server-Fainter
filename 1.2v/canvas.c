@@ -8,6 +8,7 @@
 #include "client_manager.h"
 #include "parsing_json.h"
 #include "cjson/cJSON.h"
+#include "save_canvas.h"
 
 // 두 timeval 구조체 간의 시간 차이를 밀리초 단위로 반환
 double time_diff_ms(struct timeval start, struct timeval end) {
@@ -56,10 +57,9 @@ static void *worker_thread(void *arg) {
 
         gettimeofday(&current_time, NULL);
         double time_gap_save = time_diff_ms(last_save, current_time);
-        if (time_gap_save >= 1000.0  * 60 * 1) {    // 1분 
-            
+        if (time_gap_save >= 1000.0  * 10 * 1) {    // 1분 
+            save_canvas_as_json(canvas, last_save);
             // 저장 로직 구현
-
             last_save = current_time;
         }
     }
@@ -77,7 +77,7 @@ void init_canvas(Canvas *canvas, ClientManager *cm, int width, int height, int q
 
     canvas->canvas_width = width;
     canvas->canvas_height = height;
-    canvas->pixels = (Pixel *)malloc(sizeof(Pixel) * width * height);
+    canvas->pixels = malloc(sizeof(Pixel) * width * height);
     if (canvas->pixels == NULL) {
         fprintf(stderr, "캔버스 픽셀 메모리 할당 실패\n");
         exit(EXIT_FAILURE);

@@ -37,19 +37,19 @@ typedef enum {
     DARK_BROWN,     // #8c2600
     BLACK,          // #000000
     WHITE,          // #ffffff,
-} Color;
+} ColorIndex;
 
 // 픽셀 구조체
 typedef struct {
     int x;
     int y;
-    Color color;
+    ColorIndex color;
 } Pixel;
 
 // 수정된 픽셀 구조체
 typedef struct {
     int key;            // x * CANVAS_HEIGHT + y
-    Color color;
+    ColorIndex color;
     UT_hash_handle hh;  // uthash 핸들
 } ModifiedPixel;
 
