@@ -23,7 +23,8 @@
 
 ### 최종 버전
 
-![image.png](https://prod-files-secure.s3.us-west-2.amazonaws.com/4d027b75-ba5f-4da9-bdd7-11e571c2a668/3d4b4949-53bb-4467-8554-9cf458344960/image.png)
+![image](https://github.com/user-attachments/assets/1c7037f0-4096-44b3-a91a-268f9ef18970)
+
 
 **- 1.2 v**
 
