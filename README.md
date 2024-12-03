@@ -1,7 +1,7 @@
 # server-fainter
 
 fainter-Server 
-**최종 병합 문서 레포지토리** 입니다
+**최종 병합 문서 레포지토리** 입니다.
 
 
 <a href="https://github.com/user-attachments/assets/c08d2df0-c8a0-4e95-9993-a7ef02d9f415
