@@ -1,6 +1,5 @@
 # SERVER-FAINTER
-
-![image](https://github.com/user-attachments/assets/d3289761-9c99-446b-89fa-d5232724b233)
+![image](https://github.com/user-attachments/assets/0de63c88-c24e-4fb6-b716-0d6ee45d7a2f)
 
 - **프로젝트명 :** FAINTER
     - 거대한 캔버스를 모든 사용자가 함께 채워나가는 웹 서비스,
