@@ -1,0 +1,96 @@
+/* 전체적인 페이지 스타일 */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f7f7f7;
+    color: #333;
+    /* 화면 크기에 맞게 조정 */
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 동접자 수 표시 박스 스타일 */
+#client-count-box {
+    position: fixed;
+    top: 2vh;
+    right: 2vw;
+    padding: 1vh 2vw;
+    background-color: #fff;
+    color: #333;
+    border: 0.2vw solid #ccc;
+    border-radius: 1vw;
+    box-shadow: 0 0.4vh 0.8vh rgba(0, 0, 0, 0.1);
+    font-size: 2vw;
+    font-weight: bold;
+    z-index: 1000;
+}
+
+/* 캔버스 컨테이너 스타일 */
+#canvas-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* 캔버스 스타일 */
+#canvas {
+    border: 1px solid black;
+    image-rendering: pixelated;
+    /* 캔버스를 부모 컨테이너에 맞게 확장 */
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* 팔레트 컨테이너 */
+#color-palette-bar {
+    /* position: fixed; */
+    /* bottom: 5vh; */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 1vh 0;
+    background-color: #f7f7f7;
+}
+
+/* 색상 선택기 */
+#color-picker {
+    width: 3vw;
+    height: 3vw;
+    border: none;
+    cursor: pointer;
+    margin-right: 1vw;
+}
+
+/* 팔레트 */
+.palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1vw;
+    background-color: #f0f0f0;
+    padding: 1vw;
+    border-radius: 1vw;
+    box-shadow: 0 0.4vh 0.8vh rgba(0, 0, 0, 0.1);
+}
+
+/* 색상 박스 */
+.color-box {
+    width: 2vw;
+    height: 2vw;
+    border: 0.1vw solid #ccc;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+/* 색상 박스 호버 효과 */
+.color-box:hover {
+    transform: scale(1.2);
+}
