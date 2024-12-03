@@ -2,18 +2,18 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 export let options = {
-//   stages: [
-//     { duration: '1s', target: 100 },  // 1초 동안 300명의 가상 사용자로 요청 보냄
-//     { duration: '29s', target: 100 }, // 29초 동안 300명으로 지속적으로 테스트
-//   ],
-// };
-
-stages: [
-    { duration: '30s', target: 100 }, // 30초 동안 100명 도달
-    { duration: '1m', target: 1000 }, // 1분 동안 1000명 도달
-    { duration: '30s', target: 0 },   // 종료
+  stages: [
+    { duration: '1m 30s', target: 1000 },  // 1초 동안 300명의 가상 사용자로 요청 보냄
+    { duration: '30s', target: 0 }, // 29초 동안 300명으로 지속적으로 테스트
   ],
 };
+
+// stages: [
+//     { duration: '30s', target: 100 }, // 30초 동안 100명 도달
+//     { duration: '1m', target: 1000 }, // 1분 동안 1000명 도달
+//     { duration: '30s', target: 0 },   // 종료
+//   ],
+// };
   
 
 // 1초에 300개의 요청이 보내지도록 설정
