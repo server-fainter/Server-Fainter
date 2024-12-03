@@ -1,4 +1,5 @@
 #include "parsing_json.h"
+#include "canvas.h"
 #include <cjson/cJSON.h>
 
 // 유효한 좌표인지 확인
@@ -7,16 +8,9 @@ bool is_valid_coordinate(int x, int y, int width, int height) {
 }
 
 // 유효한 HEX 색상인지 확인
-bool is_valid_hex_color(const char *color) {
-    if (color[0] != '#' || strlen(color) != 7) {
+bool is_valid_hex_color(int color) {
+    if (color < 0 && color > 29) {
         return false;
-    }
-    for (int i = 1; i < 7; i++) {
-        if (!((color[i] >= '0' && color[i] <= '9') ||
-              (color[i] >= 'A' && color[i] <= 'F') ||
-              (color[i] >= 'a' && color[i] <= 'f'))) {
-            return false;
-              }
     }
     return true;
 }
@@ -42,7 +36,7 @@ Pixel *parse_pixel_json(const char *json_str) {
     cJSON *y_item = cJSON_GetObjectItem(pixel_item, "y");
     cJSON *color_item = cJSON_GetObjectItem(pixel_item, "color");
 
-    if (!cJSON_IsNumber(x_item) || !cJSON_IsNumber(y_item) || !cJSON_IsString(color_item)) {
+    if (!cJSON_IsNumber(x_item) || !cJSON_IsNumber(y_item) || !cJSON_IsNumber(color_item)) {
         fprintf(stderr, "Invalid pixel data in JSON: %s\n", json_str);
         cJSON_Delete(json);
         return NULL;
@@ -56,7 +50,7 @@ Pixel *parse_pixel_json(const char *json_str) {
     }
     parsed_pixel->x = x_item->valueint;
     parsed_pixel->y = y_item->valueint;
-    strncpy(parsed_pixel->color, color_item->valuestring, 8);
+    parsed_pixel->color = color_item->valueint;
 
     cJSON_Delete(json);
     return parsed_pixel;
@@ -95,11 +89,11 @@ void process_json(Canvas *canvas, const char *buffer, size_t length) {
                     if (is_valid_coordinate(pixel->x, pixel->y, canvas->canvas_width, canvas->canvas_height) &&
                         is_valid_hex_color(pixel->color)) {
 
-                        // printf("Update Pixel: x=%d, y=%d, color=%s\n", pixel->x, pixel->y, pixel->color);
+                        printf("Update Pixel: x=%d, y=%d, color=%d\n", pixel->x, pixel->y, pixel->color);
 
                         // 픽셀 업데이트 처리
                         int index = pixel->y * canvas->canvas_width + pixel->x;
-                        strcpy(canvas->pixels[index].color, pixel->color);
+                        canvas->pixels[index].color = pixel->color;
 
                         // 수정된 픽셀 해시 맵에 추가
                         int key = index;
@@ -108,14 +102,15 @@ void process_json(Canvas *canvas, const char *buffer, size_t length) {
                         if (p == NULL) {
                             p = (ModifiedPixel *)malloc(sizeof(ModifiedPixel));
                             p->key = key;
-                            strcpy(p->color, pixel->color);
+                            p->color = pixel->color;
                             HASH_ADD_INT(canvas->modified_pixels, key, p);
                         } else {
+                            p->color = pixel->color;
                             // 이미 존재하면 색상 업데이트
-                            strcpy(p->color, pixel->color);
+                            
                         }
                     } else {
-                        fprintf(stderr, "Invalid Pixel: x=%d, y=%d, color=%s\n", pixel->x, pixel->y, pixel->color);
+                        fprintf(stderr, "Invalid Pixel: x=%d, y=%d, color=%d\n", pixel->x, pixel->y, pixel->color);
                     }
                     free(pixel);
                 }

@@ -190,7 +190,6 @@ int main() {
                      if (is_http_request(buffer, len)) {
 
                          if (is_complete_http_request(buffer)) {
-
                              Task task = {fd, TASK_HTTP_REQUEST, buffer, len};
                              push_task(ctx->cm->queue, task);
                          }

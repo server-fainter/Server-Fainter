@@ -5,17 +5,51 @@
 #include "include/uthash.h"
 #include "client_manager.h"
 
+// 팔레트 색상 인덱스 정의
+typedef enum {
+    RED,            // #ff0000
+    ORANGE,         // #ffa600
+    YELLOW,         // #ffe600
+    LIGHT_GREEN,    // #8aff00
+    GREEN,          // #24ff00
+    DARK_GREEN,     // #00ff00
+    CYAN,           // #00ff83
+    LIGHT_CYAN,     // #00ffe6
+    SKY_BLUE,       // #00e7ff
+    BLUE,           // #008fff
+    DARK_BLUE,      // #0024ff
+    PURPLE,         // #2400ff
+    MAGENTA,        // #8a00ff
+    PINK,           // #ff00ff
+    HOT_PINK,       // #ff0083
+    MAROON,         // #ff0024
+    DARK_RED,       // #d70000
+    BROWN,          // #8c4000
+    ORANGE_BROWN,   // #e67c00
+    LIGHT_YELLOW,   // #b1d700
+    DARK_YELLOW,    // #4cc100
+    TURQUOISE,      // #00c16a
+    AQUA,           // #00c1c1
+    DARK_AQUA,      // #0055c1
+    NAVY,           // #002fc1
+    DARK_PURPLE,    // #7200c1
+    PLUM,           // #c10072
+    DARK_BROWN,     // #8c2600
+    BLACK,          // #000000
+    WHITE,          // #ffffff,
+} Color;
+
 // 픽셀 구조체
 typedef struct {
     int x;
     int y;
-    char color[8];
+    Color color;
 } Pixel;
 
 // 수정된 픽셀 구조체
 typedef struct {
     int key;            // x * CANVAS_HEIGHT + y
-    char color[8];
+    Color color;
     UT_hash_handle hh;  // uthash 핸들
 } ModifiedPixel;
 

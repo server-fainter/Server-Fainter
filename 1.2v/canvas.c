@@ -25,8 +25,9 @@ static void *worker_thread(void *arg) {
     Canvas *canvas = (Canvas *)arg;
 
     // 일정 시간마다 브로드캐스트 업데이트 수행
-    struct timeval last_broadcast, current_time;
+    struct timeval last_broadcast, last_save, current_time;
     gettimeofday(&last_broadcast, NULL);
+    gettimeofday(&last_save, NULL);
 
     while (1) {
         // 작업 큐에서 작업을 가져옴
@@ -48,10 +49,18 @@ static void *worker_thread(void *arg) {
 
         gettimeofday(&current_time, NULL);
         double time_gap = time_diff_ms(last_broadcast, current_time);
-        if (time_gap >= 100.0) { // 100밀리초
-            //printf("Broadcast Time\n");
+        if (time_gap >= 500.0) {                    // 100밀리초
             broadcast_updates(canvas);
             last_broadcast = current_time;
+        }
+
+        gettimeofday(&current_time, NULL);
+        double time_gap_save = time_diff_ms(last_save, current_time);
+        if (time_gap_save >= 1000.0  * 60 * 1) {    // 1분 
+            
+            // 저장 로직 구현
+
+            last_save = current_time;
         }
     }
 
@@ -78,7 +87,7 @@ void init_canvas(Canvas *canvas, ClientManager *cm, int width, int height, int q
     for (int i = 0; i < width * height; i++) {
         canvas->pixels[i].x = i % width;
         canvas->pixels[i].y = i / width;
-        strncpy(canvas->pixels[i].color, "#FFFFFF", 8);
+        canvas->pixels[i].color = WHITE;  // 컬러 흰색으로 초기화 
     }
 
     printf("캔버스 배열 할당 및 초기화 성공\n");
@@ -171,7 +180,7 @@ void broadcast_updates(Canvas *canvas) {
         cJSON *json_pixel = cJSON_CreateObject();
         cJSON_AddNumberToObject(json_pixel, "x", x);
         cJSON_AddNumberToObject(json_pixel, "y", y);
-        cJSON_AddStringToObject(json_pixel, "color", p->color);
+        cJSON_AddNumberToObject(json_pixel, "color", p->color);
 
         cJSON_AddItemToArray(json_pixels, json_pixel);
     }

@@ -38,3 +38,43 @@ body {
     width: 800px;
     height: 800px;
 }
+
+/* 팔레트 컨테이너 */
+#color-palette-bar {
+    position: fixed;
+    bottom: 5vh;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+/* 팔레트 */
+.palette {
+    display: grid;
+    grid-template-columns: repeat(10, 2vw);
+    gap: 1vw;
+    background-color: #f0f0f0;
+    padding: 1vw;
+    border-radius: 1vw;
+    box-shadow: 0 0.4vh 0.8vh rgba(0, 0, 0, 0.1);
+}
+
+/* 색상 박스 */
+.color-box {
+    width: 2vw;
+    height: 2vw;
+    border: 0.1vw solid #ccc;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+/* 선택된 색상 박스 */
+.color-box.active {
+    border: 0.2vw solid #000;
+    transform: scale(1.1);
+}
+
+/* 색상 박스 호버 효과 */
+.color-box:hover {
+    transform: scale(1.2);
+}
