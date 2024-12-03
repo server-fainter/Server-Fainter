@@ -1,5 +1,7 @@
 # SERVER-FAINTER
 
+![image](https://github.com/user-attachments/assets/d3289761-9c99-446b-89fa-d5232724b233)
+
 - **프로젝트명 :** FAINTER
     - 거대한 캔버스를 모든 사용자가 함께 채워나가는 웹 서비스,
     그리고 이를 받치는 안정적인 서버 제작을 목표로 합니다.
