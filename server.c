@@ -78,49 +78,53 @@ void init_server(ServerManager *sm) {
         exit(EXIT_FAILURE);
     }
 
-    printf("Success Init Server!\nServer is listening on port %d\n", PORT);
+    printf("Server is listening on port %d\n", PORT);
 }
 
 
 // JSON 데이터 파일에 데이터 추가
-void append_to_json_file(const char *data) {
-    FILE *json_file = fopen(FILE_PATH, "r+");
-    if (json_file == NULL) {
-        json_file = fopen(FILE_PATH, "w");
-        fprintf(json_file, "[\n  %s\n]\n", data);
-        fclose(json_file);
+void append_json_file(const char *data) {
+    FILE *json = fopen(FILE_PATH, "r+");
+    if (json == NULL) {
+        json = fopen(FILE_PATH, "w"); //json파일 없으면 생성
+        fprintf(json, "[\n  %s\n]\n", data);
+        fclose(json);
         return;
     }
 
-    fseek(json_file, 0, SEEK_END);
-    long file_size = ftell(json_file);
-    if (file_size == 0) {
-        fprintf(json_file, "[\n  %s\n]\n", data);
+    fseek(json, 0, SEEK_END);
+    long File_Size = ftell(json); //파일 끝으로 이동해서 크기 확인
+    if (File_Size == 0) {
+        fprintf(json, "[\n  %s\n]\n", data);
     } else {
-        fseek(json_file, -2, SEEK_END);
-        fprintf(json_file, ",\n  %s\n]", data);
+        fseek(json, -2, SEEK_END); //] 위치로 이동
+        fprintf(json, ",\n  %s\n]", data); //픽셀 데이터 추가
     }
-    fclose(json_file);
+    fclose(json);
 }
 
 
 
 // 서버에서 픽셀 데이터를 JSON 형식으로 반환하는 함수
-void send_json_response(int client_socket) {
+//클라이언트가 GET /data.json 요청을 보내면 JSON파일을 찾아서 읽고 HTTP응답으로 전송
+//클라이언트는 HTTP 응답에서 JSON데이터를 받아서 사용함 
+void send_cli_json(int cli_sock) {
     FILE *file = fopen(FILE_PATH, "r");
-    if (file == NULL) {
+    if (file == NULL) { //파일 없으면 
         const char *response =
             "HTTP/1.1 404 Not Found\r\n"
             "Content-Type: text/plain\r\n"
             "Connection: close\r\n"
             "\r\n"
             "404 Not Found";
-        send(client_socket, response, strlen(response), 0);
+        send(cli_sock, response, strlen(response), 0);
         return;
     }
 
+    //파일 크기 구하기
     fseek(file, 0, SEEK_END);
     long file_size = ftell(file);
+
     fseek(file, 0, SEEK_SET);
 
     char *json_data = (char *)malloc(file_size + 1);
@@ -134,18 +138,22 @@ void send_json_response(int client_socket) {
              "Content-Type: application/json\r\n"
              "Connection: close\r\n"
              "\r\n");
-    send(client_socket, header, strlen(header), 0);
-    send(client_socket, json_data, file_size, 0);
+    //클라이언트에게 헤더 전송
+    send(cli_sock, header, strlen(header), 0);
+    //클라이언트에게 json데이터 전송 
+    send(cli_sock, json_data, file_size, 0);
 
     free(json_data);
 }
 
+
 // POST 요청으로 받은 픽셀 데이터를 JSON 파일에 추가
-void handle_pixel_update(int client_socket, const char *buffer) {
-    char *body = strstr(buffer, "\r\n\r\n");
+//클라이언트가 서버로 픽셀 데이터를 전송하면 서버가 body부분을 읽고 JSON파일에 저장
+void pixel_update(int cli_sock, const char *buf) {
+    char *body = strstr(buf, "\r\n\r\n");
     if (body != NULL) {
-        body += 4; // 본문 시작
-        append_to_json_file(body); // JSON 파일에 데이터 추가
+        body += 4; // 본문 시작위치
+        append_json_file(body); // JSON 파일에 데이터에 픽셀 정보 저장
         const char *response =
             "HTTP/1.1 200 OK\r\n"
             "Access-Control-Allow-Origin: *\r\n"
@@ -153,20 +161,25 @@ void handle_pixel_update(int client_socket, const char *buffer) {
             "Connection: close\r\n"
             "\r\n"
             "{ \"status\": \"success\" }";
-        send(client_socket, response, strlen(response), 0);
+        send(cli_sock, response, strlen(response), 0);
     }
 }
+
 
 // HTTP 요청 처리 함수 수정
-void handle_http_request(int client_socket, const char *buffer) {
+void http_request(int client_socket, const char *buffer) {
     if (strncmp(buffer, "GET / ", 6) == 0 || strncmp(buffer, "GET /index.html", 16) == 0) {
+        //클라이언트가 웹페이지 요청하면 
         // cli.html 파일을 전송
         send_file_content(client_socket, "cli.html", "text/html");
+        //파일 내용을 클라이언트에게 전송
     } else if (strncmp(buffer, "GET /get-existing-pixels", 24) == 0) {
-        send_json_response(client_socket); // JSON 데이터 반환
+        //클라이언트가 기존 픽셀 불러오고 싶을 때 
+        send_json_response(client_socket); // JSON 데이터 반환해서 전송
     } else if (strncmp(buffer, "POST /update-pixel", 18) == 0) {
-        handle_pixel_update(client_socket, buffer); // 픽셀 데이터 처리
-    } else {
+        //클라이언트가 픽셀 데이터를 업데이트학고 싶을 때
+        pixel_update(client_socket, buffer); // 픽셀 데이터 처리
+    } else { //나머지인 경우는 404응답
         const char *response =
             "HTTP/1.1 404 Not Found\r\n"
             "Content-Type: text/plain\r\n"
@@ -177,33 +190,35 @@ void handle_http_request(int client_socket, const char *buffer) {
     }
 }
 
+
 // HTML 파일 전송 함수 추가
-void send_file_content(int client_socket, const char *filename, const char *content_type) {
+void send_file_content(int cli_sock, const char *filename, const char *content_type) {
     FILE *file = fopen(filename, "r");
-    if (file == NULL) {
+    if (file == NULL) { //파일 없으면 404응답 
         const char *response =
             "HTTP/1.1 404 Not Found\r\n"
             "Content-Type: text/plain\r\n"
             "Connection: close\r\n"
             "\r\n"
             "404 Not Found";
-        send(client_socket, response, strlen(response), 0);
+        send(cli_sock, response, strlen(response), 0);
         return;
     }
 
     char header[BUFFER_SIZE];
+    //파일을 성공적으로 열면 HTTP헤더를 클라이언트에게 보냄
     snprintf(header, sizeof(header),
              "HTTP/1.1 200 OK\r\n"
              "Content-Type: %s\r\n"
              "Connection: close\r\n"
              "\r\n",
              content_type);
-    send(client_socket, header, strlen(header), 0);
+    send(cli_sock, header, strlen(header), 0);
 
-    char buffer[BUFFER_SIZE];
+    char buf[BUFFER_SIZE];
     size_t bytes;
-    while ((bytes = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        send(client_socket, buffer, bytes, 0);
+    while ((bytes = fread(buf, 1, sizeof(buf), file)) > 0) {
+        send(cli_sock, buf, bytes, 0); //파일 데이터를 클라이언트에게 전송
     }
     fclose(file);
 }
@@ -224,7 +239,7 @@ void server_event_loop(ServerManager *sm) {
                 int bytes_read = read(client_socket, buffer, BUFFER_SIZE - 1);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0';
-                    handle_http_request(client_socket, buffer);
+                    http_request(client_socket, buffer);
                 }
                 close(client_socket);
             }

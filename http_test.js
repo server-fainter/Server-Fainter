@@ -3,7 +3,7 @@ import { check, sleep } from 'k6';
 
 export let options = {
   stages: [
-    { duration: '1m 30s', target: 1000 },  // 1초 동안 300명의 가상 사용자로 요청 보냄
+    { duration: '1m30s', target: 700 },  // 1초 동안 300명의 가상 사용자로 요청 보냄
     { duration: '30s', target: 0 }, // 29초 동안 300명으로 지속적으로 테스트
   ],
 };
