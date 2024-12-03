@@ -43,6 +43,16 @@ static void *worker_thread(void *arg) {
                 break;
             }
 
+            case TASK_NEW_CLIENT: {
+                char *canvas_data = trans_canvas_as_json(canvas);
+                size_t data_len = strlen(canvas_data);
+                size_t frmae_len = 0;
+                uint8_t * canvas_frame = create_websocket_frame(canvas_data, data_len, &frmae_len);
+                free(canvas_data);
+                Task t = {task.client, TASK_INIT_CANAVAS, canvas_frame, frmae_len};
+                push_task(canvas->cm->queue, t);
+            }
+
             // 필요한 다른 작업 유형 처리 추가
             default: {
                 break;
@@ -89,7 +99,7 @@ void init_canvas(Canvas *canvas, ClientManager *cm, int width, int height, int q
     for (int i = 0; i < width * height; i++) {
         canvas->pixels[i].x = i % width;
         canvas->pixels[i].y = i / width;
-        canvas->pixels[i].color = WHITE;  // 컬러 흰색으로 초기화 
+        strcpy(canvas->pixels[i].color, "#FFFFFF");  // 컬러 흰색으로 초기화 
     }
 
     printf("캔버스 배열 할당 및 초기화 성공\n");
@@ -111,7 +121,7 @@ void init_canvas(Canvas *canvas, ClientManager *cm, int width, int height, int q
     }
 
     printf("캔버스 스레드 생성 성공\n");
-}
+} 
 
 // WebSocket 프레임 생성 함수 구현
 uint8_t *create_websocket_frame(uint8_t *payload_data, size_t payload_len, size_t *frame_len) {
@@ -182,7 +192,7 @@ void broadcast_updates(Canvas *canvas) {
         cJSON *json_pixel = cJSON_CreateObject();
         cJSON_AddNumberToObject(json_pixel, "x", x);
         cJSON_AddNumberToObject(json_pixel, "y", y);
-        cJSON_AddNumberToObject(json_pixel, "color", p->color);
+        cJSON_AddStringToObject(json_pixel, "color", p->color);
 
         cJSON_AddItemToArray(json_pixels, json_pixel);
     }
@@ -194,7 +204,6 @@ void broadcast_updates(Canvas *canvas) {
     // JSON 문자열로 변환
     char *message_str = cJSON_PrintUnformatted(json_message);
     size_t message_len = strlen(message_str);
-
 
     // Frame 생성
     size_t frame_len = 0;

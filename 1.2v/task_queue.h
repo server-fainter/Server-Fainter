@@ -14,7 +14,8 @@ typedef enum {
     TASK_MESSAGE_INCOMPLETE_HTTP,        // 메세지가 불완전함(조각남, http)
     TASK_MESSAGE_INCOMPLETE_FRAME,       // 메세지가 불완전함(조각남, frame)
     TASK_FRAME_MESSAGE,             // frame 메세지 요청(완전함, 혹은 마지막 조각임)
-    TASK_UNKNOWN_MESSAGE            // 알수없는 형식(http 조각 일 수 있음)
+    TASK_UNKNOWN_MESSAGE,           // 알수없는 형식(http 조각 일 수 있음)
+    TASK_INIT_CANAVAS
 }TaskType;
 
 // 작업(Task) 구조체

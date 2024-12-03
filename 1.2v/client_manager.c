@@ -26,6 +26,15 @@ static void *worker_thread(void *arg) {
         Client *client = find_client(cm, task.client);
 
         switch (task.type) {
+
+            case TASK_INIT_CANAVAS: {
+                if(send(client->socket_fd, task.data, task.data_len, 0) == -1){
+                    printf("캔버스 초기화 전송 실패\n");
+                }
+                free(task.data);
+                break;
+            }
+
             case TASK_NEW_CLIENT: {
                 addClient(cm);
                 break;
@@ -110,6 +119,9 @@ static void *worker_thread(void *arg) {
 
             case TASK_WEBSOCKET_CLOSE : {
                 if (client->state == CONNECTION_OPEN) {
+
+                    
+
                     // printf("[CM]웹소켓 접속 종료\n");
                     client->state = CONNECTION_CLOSING;
                     // 종료 프레임 (Opcode: 0x8)
@@ -213,8 +225,8 @@ int initClientManager(
     }
 
     // 디버깅용 옵션
-    //int optvalue=1;
-    //setsockopt(manager->server_socket, SOL_SOCKET, SO_REUSEADDR, &optvalue, sizeof(optvalue));
+    int optvalue=1;
+    setsockopt(manager->server_socket, SOL_SOCKET, SO_REUSEADDR, &optvalue, sizeof(optvalue));
     signal(SIGPIPE, SIG_IGN);
 
     printf("[CM]서버 소켓 생성 완료\n");

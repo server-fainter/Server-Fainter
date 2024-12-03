@@ -11,9 +11,15 @@
     <span>동접자 수: </span>
     <span id="client-count">0</span>
 </div>
-<canvas id="canvas" width="500" height="500"></canvas>
+<!-- 캔버스 컨테이너 추가 -->
+<div id="canvas-container">
+    <canvas id="canvas" width="500" height="500"></canvas>
+</div>
 <div id="color-palette-bar">
-    <div class="palette" id="color-palette"></div>
+    <!-- 색상 선택기 -->
+    <input type="color" id="color-picker" value="#ffffff">
+    <!-- 최근 사용한 색상 팔레트 -->
+    <div class="palette" id="recent-colors"></div>
 </div>
 <!-- 스크립트 파일 연결 -->
 <script src="script.js"></script>

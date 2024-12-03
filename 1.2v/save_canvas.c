@@ -24,7 +24,7 @@ void save_canvas_as_json(Canvas *canvas) {
     // 픽셀 데이터 배열 생성
     cJSON *pixels = cJSON_CreateArray();
     for (int i = 0; i < canvas->canvas_width * canvas->canvas_height; i++) {
-        cJSON_AddItemToArray(pixels, cJSON_CreateNumber(canvas->pixels[i].color));
+        cJSON_AddItemToArray(pixels, cJSON_CreateString(canvas->pixels[i].color));
     }
 
     // 픽셀 데이터를 JSON에 추가
@@ -49,4 +49,38 @@ void save_canvas_as_json(Canvas *canvas) {
     // 메모리 해제
     free(json_string);
     cJSON_Delete(root);
+}
+
+char *trans_canvas_as_json(Canvas *canvas) {
+    // 타이밍 시작
+    clock_t start = clock();
+
+    // 최상위 JSON 객체 생성
+    cJSON *root = cJSON_CreateObject();
+    cJSON *init = cJSON_CreateObject(); // "init" 객체 생성
+    cJSON_AddItemToObject(root, "init", init);
+
+    // Canvas 데이터 추가
+    cJSON_AddNumberToObject(init, "width", canvas->canvas_width);
+    cJSON_AddNumberToObject(init, "height", canvas->canvas_height);
+
+    // 픽셀 데이터 배열 생성
+    cJSON *pixels = cJSON_CreateArray();
+    for (int i = 0; i < canvas->canvas_width * canvas->canvas_height; i++) {
+        cJSON_AddItemToArray(pixels, cJSON_CreateString(canvas->pixels[i].color));
+    }
+
+    // 픽셀 데이터를 JSON에 추가
+    cJSON_AddItemToObject(init, "pixels", pixels);
+
+    // JSON 데이터를 파일로 저장
+    char *json_string = cJSON_Print(root);
+
+    // 타이밍 끝        
+    clock_t end = clock();
+    double time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+    printf("변환 저장 소요 시간: %f 초\n", time_taken);
+
+    cJSON_Delete(root);
+    return json_string;
 }

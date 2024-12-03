@@ -97,6 +97,7 @@ void handle_static_file_request(int client_fd, const char *path) {
 
 // WebSocket 업그레이드 요청 처리 함수
 void handle_websocket_upgrade(ClientManager *manager, Client *client, HttpRequest *http_request) {
+
     char accept_key[256];
     const char *client_key = NULL;
 
@@ -139,6 +140,9 @@ void handle_websocket_upgrade(ClientManager *manager, Client *client, HttpReques
     pthread_spin_lock(&manager->lock);
     manager->client_count++;
     pthread_spin_unlock(&manager->lock);
+
+    Task task = {client->socket_fd, TASK_NEW_CLIENT, NULL, 0};
+    push_task(manager->canvas_queue, task);
 }
 
 // HTTP 요청 처리 함수
