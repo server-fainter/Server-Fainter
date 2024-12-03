@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Art</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+        .color-picker, .progress-bar-container {
+            margin-top: 10px;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+        }
+        h2 {
+            margin-bottom: 10px;
+        }
+        .progress-bar-container {
+            width: 500px;
+            height: 20px;
+            border: 1px solid black;
+            margin-top: 20px;
+            position: relative;
+            background-color: #e0e0e0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: green;
+            width: 0%;
+            transition: width 1s;
+        }
+    </style>
+</head>
+<body>
+    <h2>Pixel Drawing Canvas</h2>
+    <canvas id="canvas" width="500" height="500"></canvas>
+    <div class="color-picker">
+        <input type="color" id="colorPicker" value="#00FF00" onchange="setColor(this.value)">
+    </div>
+    <div class="progress-bar-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const pixel_Size = 5;
+        let selectedColor = '#00FF00';
+
+        let processed = new Set(); // 이미 처리된 좌표 추적
+        let progress = 0; // 프로그래스 바 진행률
+        let progressStep = 33.33; // 각 클릭 시 진행되는 프로그래스 바의 퍼센트
+        let clickQueue = []; // 클릭된 좌표를 저장할 큐
+        let progressInterval = null; // 프로그래스 바 업데이트를 위한 setInterval ID
+        let updateServerInterval = null; // 서버로 데이터 전송을 위한 setInterval ID
+
+        // 색상을 설정하는 함수
+        function setColor(color) {
+            selectedColor = color;
+        }
+
+        // 캔버스에서 좌표 색칠하기
+        function paint_Color(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * pixel_Size, y * pixel_Size, pixel_Size, pixel_Size);
+        }
+
+        // 서버에서 기존 데이터 가져오기 (3초 간격)
+        //클라이언트가 3초마다 서버에 요청을 보내어 기존의 픽셀 데이터를 가져옴
+        function pollServer() {
+            fetch('/get-existing-pixels') //get요청(데이터 요청)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    data.forEach(pixel => {
+                        let pos = `${pixel.x},${pixel.y}`;
+                        if (!processed.has(pos)) {
+                            paint_Color(pixel.x, pixel.y, pixel.color);
+                            processed.add(pos);
+                        }
+                    });
+                })
+                .catch(error => console.error('Error fetching pixels:', error));
+        }
+
+        // 페이지 로드 시 기존 데이터 불러오기
+        window.onload = () => {
+            pollServer(); // 페이지가 로드될 때 기존 데이터 가져오기
+            setInterval(pollServer, 3000); // 3초마다 데이터 갱신
+        };
+
+        // 프로그래스 바 업데이트
+        function updateProgressBar() {
+            if (progress < 100) {
+                progress += progressStep; // 각 클릭 시 33.33%씩 증가
+                document.getElementById('progressBar').style.width = `${progress}%`;
+            }
+
+            // 프로그래스 바가 100%에 도달하면 서버로 데이터 전송
+            if (progress >= 100) {
+                sendDataToServer(); // 3초마다 큐에 저장된 클릭된 픽셀 데이터 서버로 전송
+                clearInterval(progressInterval); // 프로그래스 바 업데이트 멈추기
+                progress = 0; // 프로그래스 바 초기화
+                document.getElementById('progressBar').style.width = '0%';
+            }
+        }
+
+        // 서버로 데이터 전송
+        function sendDataToServer() {
+            while (clickQueue.length > 0) {
+                const { x, y, color } = clickQueue.shift();
+                fetch('/update-pixel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ x: x, y: y, color: color })
+                }).catch(error => console.error('Error sending data:', error));
+            }
+        }
+
+        // 픽셀 클릭 이벤트
+        document.getElementById('canvas').addEventListener('click', function (e) {
+            let rect = canvas.getBoundingClientRect();
+            let x = Math.floor((e.clientX - rect.left) / pixel_Size);
+            let y = Math.floor((e.clientY - rect.top) / pixel_Size);
+            let Position = `${x},${y}`;
+
+            if (!processed.has(Position)) {
+                // 클릭된 픽셀을 큐에 추가 (서버로 전송되지 않음)
+                clickQueue.push({ x, y, color: selectedColor });
+
+                // 색칠된 데이터 클라이언트 화면에 표시
+                paint_Color(x, y, selectedColor);
+                processed.add(Position);
+
+                // 프로그래스 바 업데이트
+                progressInterval = setInterval(updateProgressBar, 1000); // 1초마다 프로그래스 바 업데이트
+                clearInterval(updateServerInterval); // 이전에 설정된 서버 전송 인터벌을 취소
+                updateServerInterval = setInterval(sendDataToServer, 3000); // 3초마다 서버로 데이터 전송
+            }
+        });
+
+    </script>
+</body>
+</html>
