@@ -1,7 +1,6 @@
 # Makefile
 
 CC = gcc
-CFLAGS = -Wall -O2
 LDFLAGS = -lpthread -lssl -lcrypto
 
 TARGET = server
@@ -11,10 +10,10 @@ OBJS = $(SRCS:.c=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) -c $<
 
 clean:
 	rm -f $(TARGET) $(OBJS)
