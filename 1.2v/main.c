@@ -8,16 +8,9 @@
 #include "canvas.h"
 #include <stdbool.h>
 #include "task_queue.h"
+#include "http_handler.h"
 
 static int count = 0;
-
-// HTTP 요청 완전성 확인
-bool is_complete_http_request(const char *buffer) {
-    // HTTP 헤더 끝은 항상 \r\n\r\n으로 끝남
-    const char *end_of_header = strstr(buffer, "\r\n\r\n");
-    return end_of_header != NULL;
-}
-
 // WebSocket 프레임을 처리하고 Task 구조체를 반환하는 함수
 void process_websocket_frame(ClientManager *manager, int client_fd, char *buf, size_t buf_len) {
     uint8_t *buffer = (uint8_t *)buf;
@@ -157,31 +150,6 @@ bool is_websocket_frame(const uint8_t *data, size_t length) {
     return true;
 }
 
-// HTTP 요청인지 확인하는 함수
-bool is_http_request(const char *data, size_t length) {
-    if (length < 4) {
-        return false; // 최소한 HTTP 메소드 길이를 확인해야 함
-    }
-
-    // HTTP 메소드 확인
-    const char *http_methods[] = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE"};
-    size_t num_methods = sizeof(http_methods) / sizeof(http_methods[0]);
-
-    for (size_t i = 0; i < num_methods; i++) {
-        size_t method_len = strlen(http_methods[i]);
-        if (length >= method_len && strncmp(data, http_methods[i], method_len) == 0) {
-            return true;
-        }
-    }
-
-    // "HTTP/1.1" 또는 "HTTP/1.0" 존재 여부 확인
-    if (strstr(data, "HTTP/1.1") || strstr(data, "HTTP/1.0")) {
-        return true;
-    }
-
-    return false;
-}
-
 int main() {
 
      // Context 구조체 초기화
@@ -191,59 +159,63 @@ int main() {
      // 이벤트 루프
      while (1) {
          int num_events = epoll_wait(ctx->cm->epoll_fd, ctx->cm->events, EVENTS_SIZE, -1);
-         count += num_events;
          if (num_events == -1) {
              perror("epoll_wait failed");
              continue;
          }
 
+         count += num_events;
+
          for (int i = 0; i < num_events; i++) {
              int fd = ctx->cm->events[i].data.fd;
-             if (fd == ctx->cm->server_socket) {
-                 // 새로운 클라이언트 연결 처리
+             if (fd == ctx->cm->server_socket) { // 새로운 클라이언트 연결 처리
+                 // 새로운 클라이언트 접속 처리
                  Task task = {0, TASK_NEW_CLIENT, NULL, 0};
                  push_task(ctx->cm->queue, task);
              }
              else {
-                char *buffer = (char *)malloc(sizeof(char) * REQUEST_BUFFER_SIZE);
-                memset(buffer, 0, REQUEST_BUFFER_SIZE * sizeof(char));
-                ssize_t len = recv(fd, buffer, REQUEST_BUFFER_SIZE, 0);
 
-                if (len <= 0) {
-                    // 클라이언트 접속 종료
-                    Task task = {fd, TASK_CLIENT_CLOSE, "", len};
-                    push_task(ctx->cm->queue, task);
-                    free(buffer);
-                }
-                else {
-                    // HTTP 요청 확인
-                    if (is_http_request(buffer, len)) {
-                        if (is_complete_http_request(buffer)) {
-                            Task task = {fd, TASK_HTTP_REQUEST, buffer, len};
-                            push_task(ctx->cm->queue, task);
-                        }
-                        else {
-                            Task task = {fd, TASK_MESSAGE_INCOMPLETE_HTTP, buffer, len};
-                            push_task(ctx->cm->queue, task);
-                            // INCOMPLETE 보낸다음 클라이언트 상태 바꾼다음, 다음 버퍼(UNKNOWN_MESSAGE)를 기다린다
-                        }
-                    }
-                    // websocket 요청 확인
-                    else if (is_websocket_frame((uint8_t *)buffer, len)) {
-                        process_websocket_frame(ctx->cm, fd, buffer, len);
-                    }
-                    else {
-                        Task task = {fd, TASK_UNKNOWN_MESSAGE, buffer, len};
-                        push_task(ctx->cm->queue, task);
-                    }
-                }
-             }
-         }
-         printf("Count: %d\n", count);
-    }
+                 char *buffer = malloc(sizeof(char) * REQUEST_BUFFER_SIZE);
+                 memset(buffer, 0, REQUEST_BUFFER_SIZE * sizeof(char));
+                 ssize_t len = recv(fd, buffer, REQUEST_BUFFER_SIZE, 0);
 
-    //리소스 정리
-    destroyClientManger(ctx->cm);
+                 if (len <= 0) { 
+                     // 클라이언트 접속 종료
+                     Task task = {fd, TASK_CLIENT_CLOSE, "", len};
+                     push_task(ctx->cm->queue, task);
+                     free(buffer);
+                 }
+                 else {
+                     // HTTP 요청 확인
+                     if (is_http_request(buffer, len)) {
+
+                         if (is_complete_http_request(buffer)) {
+
+                             Task task = {fd, TASK_HTTP_REQUEST, buffer, len};
+                             push_task(ctx->cm->queue, task);
+                         }
+                         else {
+                             Task task = {fd, TASK_MESSAGE_INCOMPLETE_HTTP, buffer, len};
+                             push_task(ctx->cm->queue, task);
+                             // INCOMPLETE 보낸다음 클라이언트 상태 바꾼다음, 다음 버퍼(UNKNOWN_MESSAGE)를 기다린다
+                         }
+                     }
+                     // websocket 요청 확인
+                     else if (is_websocket_frame((uint8_t *)buffer, len)) {
+                         process_websocket_frame(ctx->cm, fd, buffer, len);
+                     }
+                     else {
+                         Task task = {fd, TASK_UNKNOWN_MESSAGE, buffer, len};
+                         push_task(ctx->cm->queue, task);
+                     }
+                 }
+              }
+          }
+          printf("Count: %d\n", count);
+     }
+
+     //리소스 정리
+     destroyClientManger(ctx->cm);
 
     return 0;
 }

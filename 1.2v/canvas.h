@@ -31,6 +31,7 @@ typedef struct {
 } Canvas;
 
 
+// 브로드캐스팅용 함수
 uint8_t *create_websocket_frame(uint8_t *payload_data, size_t payload_len, size_t *frame_len);
 void broadcast_updates(Canvas *canvas);
 

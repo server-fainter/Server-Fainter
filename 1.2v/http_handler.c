@@ -96,7 +96,7 @@ void handle_static_file_request(int client_fd, const char *path) {
 }
 
 // WebSocket 업그레이드 요청 처리 함수
-void handle_websocket_upgrade(Client *client, HttpRequest *http_request) {
+void handle_websocket_upgrade(ClientManager *manager, Client *client, HttpRequest *http_request) {
     char accept_key[256];
     const char *client_key = NULL;
 
@@ -128,17 +128,21 @@ void handle_websocket_upgrade(Client *client, HttpRequest *http_request) {
                           "\r\n",
                           accept_key);
 
-    printf("Websocket Connected :%d\n", client->socket_fd);
+    // printf("Websocket Connected :%d\n", client->socket_fd);
 
     // 응답 전송
     send(client->socket_fd, response, length, 0);
 
     // 클라이언트 상태 업데이트
     client->state = CONNECTION_OPEN;
+    // 현재 접속한 클라이언트 수 증가
+    pthread_spin_lock(&manager->lock);
+    manager->client_count++;
+    pthread_spin_unlock(&manager->lock);
 }
 
 // HTTP 요청 처리 함수
-void handle_http_request(Client *client) {
+void handle_http_request(ClientManager *manager, Client *client) {
 
     HttpRequest http_request;
     memset(&http_request, 0, sizeof(HttpRequest));
@@ -169,7 +173,7 @@ void handle_http_request(Client *client) {
 
     if (is_upgrade) {
         // WebSocket 업그레이드 요청 처리
-        handle_websocket_upgrade(client, &http_request);
+        handle_websocket_upgrade(manager, client, &http_request);
     } else {
         // 정적 파일 요청 처리
         handle_static_file_request(client->socket_fd, http_request.path);
@@ -179,4 +183,37 @@ void handle_http_request(Client *client) {
     if (http_request.body) {
         free(http_request.body);
     }
+}
+
+// HTTP 요청 완전성 확인
+bool is_complete_http_request(const char *buffer) {
+    // HTTP 헤더 끝은 항상 \r\n\r\n으로 끝남
+    const char *end_of_header = strstr(buffer, "\r\n\r\n");
+    return end_of_header != NULL;
+}
+
+// HTTP 요청인지 확인하는 함수
+bool is_http_request(const char *data, size_t length) {
+
+    if (length < 4) {
+        return false; // 최소한 HTTP 메소드 길이를 확인해야 함
+    }
+
+    // HTTP 메소드 확인
+    const char *http_methods[] = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE"};
+    size_t num_methods = sizeof(http_methods) / sizeof(http_methods[0]);
+
+    for (size_t i = 0; i < num_methods; i++) {
+        size_t method_len = strlen(http_methods[i]);
+        if (length >= method_len && strncmp(data, http_methods[i], method_len) == 0) {
+            return true;
+        }
+    }
+
+    // "HTTP/1.1" 또는 "HTTP/1.0" 존재 여부 확인
+    if (strstr(data, "HTTP/1.1") || strstr(data, "HTTP/1.0")) {
+        return true;
+    }
+
+    return false;
 }

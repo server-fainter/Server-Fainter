@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#define REQUEST_BUFFER_SIZE 1024 * 16 // 16KB
+#define REQUEST_BUFFER_SIZE 1024 * 4 // 4KB
 #define STATIC_FILES_DIR "./static"
 
 
@@ -25,9 +25,9 @@ typedef struct Client {
     // websocket을 위해 추가한 것
     ConnectionState state;                      // 연결 상태
     char recv_buffer[REQUEST_BUFFER_SIZE];      // 수신 버퍼
-    size_t recv_buffer_len;                        // 수신 버퍼에 저장된 데이터 길이
-    bool incomplete_http;
-    bool incomplete_frame;
+    size_t recv_buffer_len;                     // 수신 버퍼에 저장된 데이터 길이
+    bool incomplete_http;                       // http 요청 조각 상태
+    bool incomplete_frame;                      // frame 요청 조각 상태
     
 } Client;
 

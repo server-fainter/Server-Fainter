@@ -3,11 +3,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h> // usleep 함수 사용
-#include <time.h>
+#include <sys/time.h>
 #include <stdint.h>
 #include "client_manager.h"
 #include "parsing_json.h"
 #include "cjson/cJSON.h"
+
+// 두 timeval 구조체 간의 시간 차이를 밀리초 단위로 반환
+double time_diff_ms(struct timeval start, struct timeval end) {
+    double start_ms = start.tv_sec * 1000.0 + start.tv_usec / 1000.0;
+    double end_ms = end.tv_sec * 1000.0 + end.tv_usec / 1000.0;
+    return end_ms - start_ms;
+}
 
 // 캔버스 매니저 스레드 함수 구현
 static void *worker_thread(void *arg) {
@@ -17,8 +24,9 @@ static void *worker_thread(void *arg) {
 
     Canvas *canvas = (Canvas *)arg;
 
-    // 일정 시간마다 브로드캐스트 업데이트 수행 (1초마다)
-    static time_t last_broadcast = 0;
+    // 일정 시간마다 브로드캐스트 업데이트 수행
+    struct timeval last_broadcast, current_time;
+    gettimeofday(&last_broadcast, NULL);
 
     while (1) {
         // 작업 큐에서 작업을 가져옴
@@ -38,8 +46,9 @@ static void *worker_thread(void *arg) {
 
         }
 
-        time_t current_time = time(NULL);
-        if (current_time - last_broadcast >= 1) {
+        gettimeofday(&current_time, NULL);
+        double time_gap = time_diff_ms(last_broadcast, current_time);
+        if (time_gap >= 100.0) { // 100밀리초
             //printf("Broadcast Time\n");
             broadcast_updates(canvas);
             last_broadcast = current_time;
@@ -96,7 +105,6 @@ void init_canvas(Canvas *canvas, ClientManager *cm, int width, int height, int q
 // WebSocket 프레임 생성 함수 구현
 uint8_t *create_websocket_frame(uint8_t *payload_data, size_t payload_len, size_t *frame_len) {
     size_t header_size = 2; // 기본 헤더 크기
-    size_t payload_field_extra_bytes = 0;
 
     // 페이로드 길이에 따라 헤더 크기 조정
     if (payload_len <= 125) {
@@ -104,11 +112,9 @@ uint8_t *create_websocket_frame(uint8_t *payload_data, size_t payload_len, size_
     } else if (payload_len <= 65535) {
         // 126 표시 + 16비트의 확장된 페이로드 길이
         header_size += 2;
-        payload_field_extra_bytes = 2;
     } else {
         // 127 표시 + 64비트의 확장된 페이로드 길이
         header_size += 8;
-        payload_field_extra_bytes = 8;
     }
 
     // 프레임 전체 길이 계산
@@ -144,7 +150,6 @@ uint8_t *create_websocket_frame(uint8_t *payload_data, size_t payload_len, size_
 
     return frame;
 }
-
 
 // 수정된 픽셀을 브로드캐스트하는 함수 구현
 void broadcast_updates(Canvas *canvas) {

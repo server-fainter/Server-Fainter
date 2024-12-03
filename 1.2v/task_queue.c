@@ -16,10 +16,8 @@ void init_task_queue(TaskQueue *queue, int size) {
 // 작업을 큐에 추가
 void push_task(TaskQueue *queue, Task task) {
 
-    const int size = queue->size;
-
     pthread_mutex_lock(&queue->lock);
-
+    const int size = queue->size;
     // 큐가 가득 찬 경우 처리
     if ((queue->rear + 1) % size == queue->front) {
         perror("Task queue is full! Dropping task.\n");
