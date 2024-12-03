@@ -35,8 +35,8 @@ body {
 #canvas {
     border: 1px solid black;
     image-rendering: pixelated;
-    width: 800px;
-    height: 800px;
+    width: 1000px;
+    height: 1000px;
 }
 
 /* 팔레트 컨테이너 */

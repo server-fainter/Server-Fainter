@@ -4,8 +4,8 @@
 #define PORT_NUMBER 8080
 #define EVENTS_SIZE 2048
 #define TASK_QUEUE_SIZE 2048
-#define CANVAS_WIDTH 1000
-#define CANVAS_HEIGHT 1000
+#define CANVAS_WIDTH 500
+#define CANVAS_HEIGHT 500
 
 #include "client_manager.h"
 #include "canvas.h"
