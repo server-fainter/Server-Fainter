@@ -8,7 +8,18 @@ const recentColorsPalette = document.getElementById('recent-colors');
 let selectedColor = '#ffffff'; // 기본값: 흰색
 
 // 최근 사용한 색상을 저장할 배열
-let recentColors = [];
+let recentColors = [
+     "#ff0000",
+          "#ffa600",
+          "#ffe600",
+          "#8aff00",
+          "#24ff00",
+          "#00ff00",
+          "#00ff83",
+          "#00ffe6",
+          "#00e7ff",
+          "#000000"
+];
 const maxRecentColors = 10; // 최대 저장 개수
 
 // 색상 선택기 이벤트 리스너
@@ -50,12 +61,13 @@ function updateRecentColorsPalette() {
         recentColorsPalette.appendChild(colorBox);
     });
 }
-
+updateRecentColorsPalette();
 // WebSocket 서버에 연결
 const ws = new WebSocket('ws://localhost:8080');
 
 ws.onopen = function() {
     console.log('WebSocket 연결이 열렸습니다.');
+
 };
 
 ws.onmessage = function(event) {

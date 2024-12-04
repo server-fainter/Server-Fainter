@@ -10,6 +10,7 @@ body {
     height: 100vh;
     overflow: hidden;
     display: flex;
+    background: linear-gradient(45deg, #d3d3d3, #f3f3f3);
     flex-direction: column;
 }
 
@@ -43,7 +44,7 @@ body {
     border: 1px solid black;
     image-rendering: pixelated;
     /* 캔버스를 부모 컨테이너에 맞게 확장 */
-    width: 100%;
+    width: 80%;
     height: auto;
     max-width: 100%;
     max-height: 100%;
