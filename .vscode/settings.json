@@ -58,6 +58,8 @@
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "files.associations": {
     "context.h": "c",
-    "client_manager.h": "c"
+    "client_manager.h": "c",
+    "thread_pool.h": "c",
+    "task_queue.h": "c"
   }
 }

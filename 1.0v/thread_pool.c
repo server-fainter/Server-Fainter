@@ -148,9 +148,10 @@ void init_thread_pool(ThreadPool *pool, Context *ctx, const int size) {
 
     // 스레드 생성
     for (int i = 0; i < size; i++) {
-        pthread_create(&pool->threads[i], NULL, worker_thread, ctx);
-        perror("pthread_create failed");
-        exit(EXIT_FAILURE);
+        if(pthread_create(&pool->threads[i], NULL, worker_thread, ctx) == -1){
+            perror("pthread_create failed");
+            exit(EXIT_FAILURE);
+        }  
     }
 
     printf("Thread Init\n");
