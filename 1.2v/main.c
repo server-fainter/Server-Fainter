@@ -66,7 +66,6 @@ void process_websocket_frame(ClientManager *manager, int client_fd, char *buf, s
         return;
     }
 
-
     // 페이로드 데이터의 시작 위치 계산
     uint8_t *payload_data = buffer + header_len;
 
