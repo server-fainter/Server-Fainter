@@ -4,8 +4,8 @@
 #include <cjson/cJSON.h>
 #include <sys/time.h>
 #include "canvas.h"
-#include <sys/stat.h> // mkdir
-#include <sys/types.h> // mode_t
+#include <sys/stat.h> 
+#include <sys/types.h> 
 
 // JSON 파일로 캔버스 저장
 void save_canvas_as_json(Canvas *canvas) {
@@ -14,7 +14,7 @@ void save_canvas_as_json(Canvas *canvas) {
     clock_t start = clock();
 
     // 파일 이름 생성
-    char *filename = "save.json";
+    char *filename = "save/save.json";
 
     // JSON 객체 생성
     cJSON *root = cJSON_CreateObject();

@@ -45,13 +45,14 @@ Pixel *parse_pixel_json(const char *json_str) {
 // 중괄호를 기준으로 JSON 추출
 void process_buffer(Canvas *canvas, const char *buffer, size_t length) {
     size_t start = 0;  // JSON 객체 시작 위치
-    int brace_count = 0; // 중괄호 개수 추적
+    int brace_count = 0; // 중괄호 개수 
 
     for (size_t i = 0; i < length; i++) {
         if (buffer[i] == '{') {
             // 열린 중괄호를 만나면 brace_count 증가
             if (brace_count == 0) {
-                start = i; // JSON 시작 위치 기록
+                // JSON 시작 위치 기록
+                start = i; 
             }
             brace_count++;
         } else if (buffer[i] == '}') {
@@ -111,6 +112,7 @@ void *worker_thread(void *arg) {
 
                 break;
             }
+            
             case TASK_SEND_STATIC_FILE: {
                 /*
                 1. 클라이언트가 새로 접속했을 경우
@@ -118,7 +120,6 @@ void *worker_thread(void *arg) {
                 */
                 break;
             }
-
 
             case TASK_BROADCAST: {
                 /*

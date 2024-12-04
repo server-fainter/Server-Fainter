@@ -29,8 +29,8 @@ static void *worker_thread(void *arg) {
     struct timeval last_broadcast, current_time;
     gettimeofday(&last_broadcast, NULL);
 
-    //struct timeval last_save;
-    //gettimeofday(&last_save, NULL);
+    struct timeval last_save;
+    gettimeofday(&last_save, NULL);
 
     while (1) {
         // 작업 큐에서 작업을 가져옴
@@ -67,13 +67,13 @@ static void *worker_thread(void *arg) {
             last_broadcast = current_time;
         }
 
-        // gettimeofday(&current_time, NULL);
-        // double time_gap_save = time_diff_ms(last_save, current_time);
-        // if (time_gap_save >= 1000.0  * 5 * 1) {    // 1분 
-        //     save_canvas_as_json(canvas);
-        //     // 저장 로직 구현
-        //     last_save = current_time;
-        // }
+        gettimeofday(&current_time, NULL);
+        double time_gap_save = time_diff_ms(last_save, current_time);
+        if (time_gap_save >= 1000.0  * 5 * 5) {    // 5분 
+            save_canvas_as_json(canvas);
+            // 저장 로직 구현
+            last_save = current_time;
+        }
     }
 
     pthread_exit(NULL);
